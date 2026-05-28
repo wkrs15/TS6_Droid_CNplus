@@ -56,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +98,14 @@ fun ConnectionScreen(
     val scope = rememberCoroutineScope()
 
     val isConnecting = connectionState == ConnectionState.CONNECTING
+    val defaultLanguage = stringResource(R.string.language_simplified_chinese)
+    var selectedLanguage by rememberSaveable { mutableStateOf(defaultLanguage) }
+    var languageMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val languageOptions = listOf(
+        stringResource(R.string.language_simplified_chinese),
+        stringResource(R.string.language_english),
+        stringResource(R.string.language_french),
+    )
 
     // Request permissions
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -126,7 +135,32 @@ fun ConnectionScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    Box {
+                        TextButton(onClick = { languageMenuExpanded = true }) {
+                            Text(selectedLanguage)
+                        }
+                        DropdownMenu(
+                            expanded = languageMenuExpanded,
+                            onDismissRequest = { languageMenuExpanded = false },
+                        ) {
+                            languageOptions.forEach { language ->
+                                DropdownMenuItem(
+                                    text = { Text(language) },
+                                    onClick = {
+                                        selectedLanguage = language
+                                        languageMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showBottomSheet = true }) {

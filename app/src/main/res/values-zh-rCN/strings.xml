@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">TS6 Droid</string>
+    <string name="language_simplified_chinese">简体中文</string>
+    <string name="language_english">English</string>
+    <string name="language_french">法语</string>
+    <string name="channel_connection">连接</string>
+    <string name="channel_connection_desc">服务器连接通知</string>
+
+    <!-- ConnectionScreen -->
+    <string name="server_address">服务器地址</string>
+    <string name="server_address_placeholder">localhost:9987</string>
+    <string name="nickname">昵称</string>
+    <string name="password_optional">密码（可选）</string>
+    <string name="channel_optional">频道（可选）</string>
+    <string name="default_channel">默认频道</string>
+    <string name="browse_channels">浏览频道</string>
+    <string name="connecting">正在连接…</string>
+    <string name="connect">连接</string>
+    <string name="add_bookmark">添加书签</string>
+    <string name="edit_bookmark">编辑书签</string>
+    <string name="save">保存</string>
+    <string name="bookmarks">书签</string>
+    <string name="no_bookmarks">暂无书签</string>
+    <string name="manual_connection">手动连接</string>
+    <string name="auto_reconnect">自动重连</string>
+    <string name="remove">移除</string>
+    <string name="edit">编辑</string>
+    <string name="select_channel">选择频道</string>
+    <string name="cancel">取消</string>
+
+    <!-- ServerScreen -->
+    <string name="server">服务器</string>
+    <string name="disconnect">断开连接</string>
+    <string name="settings">设置</string>
+    <string name="audio_gain">音量增益</string>
+    <string name="audio_gain_value">×%1$.1f</string>
+    <string name="show_link_thumbnails">显示视频链接缩略图</string>
+    <string name="auto_load_images">自动加载图片</string>
+    <string name="chat">聊天</string>
+    <string name="push_to_talk">按住说话</string>
+    <string name="ptt">按键说话</string>
+    <string name="mute_mic">静音麦克风</string>
+    <string name="mute">静音</string>
+    <string name="unmute_mic">取消静音</string>
+    <string name="tab_channel">频道</string>
+    <string name="tab_private">私信</string>
+    <string name="close">关闭</string>
+    <string name="filter_all">全部</string>
+    <string name="message_channel_placeholder">频道消息…</string>
+    <string name="message_private_placeholder">发送给 %1$s…</string>
+    <string name="send">发送</string>
+    <string name="user_fallback">用户 #%1$d</string>
+
+    <!-- UserItem -->
+    <string name="status_recording">录音中</string>
+    <string name="status_talking">正在讲话</string>
+    <string name="status_muted">已静音</string>
+    <string name="status_output_muted">输出已静音</string>
+    <string name="status_away">离开</string>
+
+    <!-- MessageBubble -->
+    <string name="image">图片</string>
+    <string name="file_attachment_info">%1$s · 已分享文件</string>
+    <string name="file_attachment_server">%1$s · 服务器文件</string>
+    <string name="download_not_supported">不支持下载</string>
+    <string name="tap_to_download">点击下载</string>
+    <string name="tap_to_view">点击查看</string>
+    <string name="tap_to_open">点击打开</string>
+    <string name="downloading">下载中…</string>
+    <string name="download">下载</string>
+    <string name="file_saved_label">已保存到下载目录</string>
+    <string name="file_saved">%1$s 已保存</string>
+    <string name="attach_file">附件</string>
+    <string name="file_size_bytes">%1$d B</string>
+    <string name="file_size_kb">%1$.1f KB</string>
+    <string name="file_size_mb">%1$.1f MB</string>
+    <string name="file_size_gb">%1$.1f GB</string>
+
+    <!-- File Manager -->
+    <string name="file_manager">文件管理</string>
+    <string name="no_files">暂无文件</string>
+    <string name="new_folder">新建文件夹</string>
+    <string name="rename">重命名</string>
+    <string name="delete_file">删除</string>
+    <string name="confirm_delete">删除 %1$s？</string>
+    <string name="enter_folder_name">输入文件夹名称</string>
+    <string name="enter_new_name">输入新名称</string>
+    <string name="refresh">刷新</string>
+    <string name="create">创建</string>
+    <string name="folder">文件夹</string>
+    <string name="upload">上传</string>
+    <string name="share_in_channel">当前频道</string>
+    <string name="share_file_title">共享 %1$s</string>
+
+    <!-- Notification -->
+    <string name="notif_unmute">取消静音</string>
+    <string name="notif_mute">静音</string>
+
+    <!-- ViewModel -->
+    <string name="unknown_sender">未知</string>
+    <string name="me_sender">我</string>
+    <string name="error_address_nickname_required">地址和昵称为必填项</string>
+    <string name="connection_failed">连接失败</string>
+    <string name="browse_failed">浏览频道失败</string>
+</resources>
