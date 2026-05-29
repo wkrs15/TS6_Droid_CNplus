@@ -1,6 +1,7 @@
 package dev.tsdroid.ui.component
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -44,6 +45,7 @@ import kotlin.math.absoluteValue
 import dev.tsdroid.R
 import dev.tslib.User
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UserItem(
     user: User,
