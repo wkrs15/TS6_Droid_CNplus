@@ -104,6 +104,8 @@ class TsConnectionService : AccessibilityService(), LifecycleOwner, ViewModelSto
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
+        Log.d(TAG, "Service onCreate: Instance eagerly bound!")
         savedStateRegistryController.performRestore(null)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         audioBridge = AudioBridge(applicationContext, tsClient)
@@ -157,14 +159,13 @@ class TsConnectionService : AccessibilityService(), LifecycleOwner, ViewModelSto
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.d(TAG, "Accessibility Service Successfully Handshaked by OS!")
-        
-        // 1. Establish the global singleton instance
         instance = this
+        Log.d(TAG, "Service onServiceConnected: OS Handshake done!")
         
-        // 2. Initialize and trigger the WindowManager injection immediately
-        // We don't show it immediately unless requested, but we can prepare it or just log.
-        // The actual showFloatingWindow() will be called by the ViewModel when connected.
+        // If we are already connected to a server, show the overlay
+        if (overlayConnected) {
+            showFloatingWindow()
+        }
     }
 
     fun connect(address: String, identity: Identity, nickname: String, password: String?) {

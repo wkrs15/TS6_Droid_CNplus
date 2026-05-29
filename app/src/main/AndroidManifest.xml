@@ -27,8 +27,7 @@
         </activity>
 
         <service
-            android:name=".service.TsConnectionService"
-            android:foregroundServiceType="mediaPlayback"
+            android:name="dev.tsdroid.service.TsConnectionService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
