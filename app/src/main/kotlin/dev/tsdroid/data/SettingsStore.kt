@@ -15,6 +15,7 @@ private val KEY_AUDIO_GAIN = floatPreferencesKey("audio_gain")
 private val KEY_SHOW_LINK_THUMBNAILS = booleanPreferencesKey("show_link_thumbnails")
 private val KEY_AUTO_LOAD_IMAGES = booleanPreferencesKey("auto_load_images")
 private val KEY_LANGUAGE = stringPreferencesKey("language")
+private val KEY_ENABLE_FLOATING_WINDOW = booleanPreferencesKey("enable_floating_window")
 
 class SettingsStore(private val context: Context) {
 
@@ -30,6 +31,9 @@ class SettingsStore(private val context: Context) {
     val language: Flow<String> = context.settingsDataStore.data
         .map { it[KEY_LANGUAGE] ?: "zh" }
 
+    val enableFloatingWindow: Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_ENABLE_FLOATING_WINDOW] ?: true }
+
     suspend fun setAudioGain(gain: Float) {
         context.settingsDataStore.edit { it[KEY_AUDIO_GAIN] = gain }
     }
@@ -44,5 +48,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setLanguage(language: String) {
         context.settingsDataStore.edit { it[KEY_LANGUAGE] = language }
+    }
+
+    suspend fun setEnableFloatingWindow(enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_ENABLE_FLOATING_WINDOW] = enabled }
     }
 }

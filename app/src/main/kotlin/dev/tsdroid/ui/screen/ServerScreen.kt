@@ -107,6 +107,7 @@ fun ServerScreen(
     val audioGain by viewModel.audioGain.collectAsState()
     val showLinkThumbnails by viewModel.showLinkThumbnails.collectAsState()
     val autoLoadImages by viewModel.autoLoadImages.collectAsState()
+    val enableFloatingWindow by viewModel.enableFloatingWindow.collectAsState()
     val mutedUserIds by viewModel.mutedUserIds.collectAsState()
     val fileManagerOpen by viewModel.fileManagerOpen.collectAsState()
     val fileList by viewModel.fileList.collectAsState()
@@ -165,6 +166,8 @@ fun ServerScreen(
             onShowLinkThumbnailsChange = { viewModel.setShowLinkThumbnails(it) },
             autoLoadImages = autoLoadImages,
             onAutoLoadImagesChange = { viewModel.setAutoLoadImages(it) },
+            enableFloatingWindow = enableFloatingWindow,
+            onEnableFloatingWindowChange = { viewModel.setEnableFloatingWindow(it) },
             onDismiss = { showSettings = false },
         )
     }
@@ -613,6 +616,8 @@ private fun SettingsDialog(
     onShowLinkThumbnailsChange: (Boolean) -> Unit,
     autoLoadImages: Boolean,
     onAutoLoadImagesChange: (Boolean) -> Unit,
+    enableFloatingWindow: Boolean,
+    onEnableFloatingWindowChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var sliderValue by remember(currentGain) { mutableFloatStateOf(currentGain) }
@@ -662,6 +667,21 @@ private fun SettingsDialog(
                     Switch(
                         checked = autoLoadImages,
                         onCheckedChange = onAutoLoadImagesChange,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.enable_floating_window),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = enableFloatingWindow,
+                        onCheckedChange = onEnableFloatingWindowChange,
                     )
                 }
             }

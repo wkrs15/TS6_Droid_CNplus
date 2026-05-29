@@ -61,12 +61,19 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         Log.d(TAG, "onStop: showing floating window")
         if (!isChangingConfigurations) {
-            if (isAccessibilityServiceEnabled(this, TsConnectionService::class.java)) {
-                connectionViewModel.showFloatingWindow()
+            val enableFloatingWindow = runBlocking(Dispatchers.IO) {
+                SettingsStore(this@MainActivity).enableFloatingWindow.first()
+            }
+            if (enableFloatingWindow) {
+                if (isAccessibilityServiceEnabled(this, TsConnectionService::class.java)) {
+                    connectionViewModel.showFloatingWindow()
+                } else {
+                    Log.w(TAG, "Accessibility service not enabled, prompting user")
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    startActivity(intent)
+                }
             } else {
-                Log.w(TAG, "Accessibility service not enabled, prompting user")
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                startActivity(intent)
+                Log.d(TAG, "Floating window is disabled in settings")
             }
         }
     }

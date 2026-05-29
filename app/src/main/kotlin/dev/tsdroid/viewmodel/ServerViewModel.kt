@@ -144,6 +144,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     val autoLoadImages: StateFlow<Boolean> = settingsStore.autoLoadImages
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val enableFloatingWindow: StateFlow<Boolean> = settingsStore.enableFloatingWindow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     // File manager state
     private val _fileManagerOpen = MutableStateFlow(false)
     val fileManagerOpen: StateFlow<Boolean> = _fileManagerOpen.asStateFlow()
@@ -504,6 +507,10 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAutoLoadImages(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setAutoLoadImages(enabled) }
+    }
+
+    fun setEnableFloatingWindow(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setEnableFloatingWindow(enabled) }
     }
 
     fun toggleVoiceMode() {

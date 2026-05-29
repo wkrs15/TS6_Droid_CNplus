@@ -219,7 +219,11 @@ class TsConnectionService : AccessibilityService(), LifecycleOwner, ViewModelSto
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    // AccessibilityService makes onBind final, so we cannot override it.
+    // We must return our binder from onStartCommand or use another mechanism if needed,
+    // but since we are an AccessibilityService, the system binds to it.
+    // If we need local binding, we can expose a static instance or use a different approach.
+    // For now, we'll remove the override.
 
     fun connect(address: String, identity: Identity, nickname: String, password: String?) {
         serviceScope.launch {
