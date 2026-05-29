@@ -52,7 +52,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import android.content.Context
-import android.os.LocaleList
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,16 +74,6 @@ import dev.tslib.ConnectionState
 import dev.tsdroid.ui.component.ChannelTree
 import dev.tsdroid.viewmodel.ConnectionViewModel
 import kotlinx.coroutines.launch
-
-private fun updateAppLocale(context: Context, languageTag: String) {
-    val locale = java.util.Locale.forLanguageTag(languageTag)
-    java.util.Locale.setDefault(locale)
-    val resources = context.resources
-    val config = resources.configuration
-    config.setLocale(locale)
-    config.setLocales(LocaleList(locale))
-    resources.updateConfiguration(config, resources.displayMetrics)
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,13 +109,10 @@ fun ConnectionScreen(
         "en" to stringResource(R.string.language_english),
         "fr" to stringResource(R.string.language_french),
     )
-    val persistedLanguageTag by settingsStore.language.collectAsState(initial = "zh")
-    var selectedLanguageTag by rememberSaveable { mutableStateOf(persistedLanguageTag) }
-    LaunchedEffect(persistedLanguageTag) {
-        selectedLanguageTag = persistedLanguageTag
-    }
+    val selectedLanguageTag by settingsStore.language.collectAsState(initial = "zh")
     val selectedLanguage = languageOptions.firstOrNull { it.first == selectedLanguageTag }?.second
         ?: stringResource(R.string.language_simplified_chinese)
+    var pendingLanguageTag by remember { mutableStateOf<String?>(null) }
     var languageMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Request permissions
@@ -173,13 +159,8 @@ fun ConnectionScreen(
                                 DropdownMenuItem(
                                     text = { Text(languageLabel) },
                                     onClick = {
-                                        selectedLanguageTag = languageTag
+                                        pendingLanguageTag = languageTag
                                         languageMenuExpanded = false
-                                        scope.launch {
-                                            settingsStore.setLanguage(languageTag)
-                                            updateAppLocale(context, languageTag)
-                                            activity?.recreate()
-                                        }
                                     },
                                 )
                             }
@@ -195,6 +176,30 @@ fun ConnectionScreen(
             }
         },
     ) { padding ->
+        pendingLanguageTag?.let { languageTag ->
+            val languageLabel = languageOptions.firstOrNull { it.first == languageTag }?.second ?: languageTag
+            AlertDialog(
+                onDismissRequest = { pendingLanguageTag = null },
+                title = { Text(stringResource(R.string.language_change_title)) },
+                text = { Text(stringResource(R.string.language_change_message, languageLabel)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch {
+                            settingsStore.setLanguage(languageTag)
+                            activity?.recreate()
+                        }
+                        pendingLanguageTag = null
+                    }) {
+                        Text(stringResource(R.string.restart))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingLanguageTag = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
