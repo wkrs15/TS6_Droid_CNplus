@@ -422,12 +422,10 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
                     pendingLocalSpeaking = isLocalVoiceActive
                     
                     // Delay local speaking state update to avoid flickering
-                    localSpeakingJob = kotlinx.coroutines.launch {
-                        delay(SPEAKER_DELAY_MS)
-                        // Only update if still the pending state
-                        if (pendingLocalSpeaking == isLocalVoiceActive) {
-                            delayedLocalSpeaking = isLocalVoiceActive
-                        }
+                    delay(SPEAKER_DELAY_MS)
+                    // Only update if still the pending state
+                    if (pendingLocalSpeaking == isLocalVoiceActive) {
+                        delayedLocalSpeaking = isLocalVoiceActive
                     }
                 }
                 
