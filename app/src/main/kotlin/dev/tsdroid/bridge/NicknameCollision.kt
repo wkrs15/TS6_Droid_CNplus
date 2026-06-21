@@ -6,9 +6,9 @@ internal const val MAX_NICKNAME_COLLISION_ATTEMPTS = 20
 
 internal fun nicknameWithCollisionSuffix(nickname: String, attempt: Int): String {
     if (attempt <= 0) return nickname
-    return buildString(nickname.length + attempt) {
+    return buildString(nickname.length + attempt.toString().length) {
         append(nickname)
-        repeat(attempt) { append('1') }
+        append(attempt)
     }
 }
 

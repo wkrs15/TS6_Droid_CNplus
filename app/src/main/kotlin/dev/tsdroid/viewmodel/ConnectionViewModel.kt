@@ -278,6 +278,12 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                         val candidateNick = nicknameWithCollisionSuffix(nick, attempt)
                         var client: Client? = null
                         try {
+                            try {
+                                identity.setNickname(candidateNick)
+                            } catch (e: Throwable) {
+                                if (e is CancellationException) throw e
+                                Log.w(TAG, "Failed to update identity nickname before browsing", e)
+                            }
                             val c = Client(addr, identity, candidateNick, pw, null)
                             client = c
                             c.waitConnected()

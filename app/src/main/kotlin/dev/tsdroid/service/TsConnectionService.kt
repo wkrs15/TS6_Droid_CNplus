@@ -416,7 +416,6 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
             return IllegalStateException("Connection service is still stopping. Please try again.")
         }
 
-        val stopStartId = latestStartId
         isIntentionalDisconnect = false
         return try {
             tsClient.connect(address, identity, nickname, password)
@@ -434,8 +433,7 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Connection error", e)
-            prepareToStop()
-            finishStopOrRestart(stopStartId)
+            cleanupFailedConnection()
             e
         }
     }
@@ -468,6 +466,16 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         hideFloatingWindow()
         audioBridge.stopCapture()
         WhisperManager.reset()
+    }
+
+    private fun cleanupFailedConnection() {
+        hideFloatingWindow()
+        audioBridge.stopCapture()
+        WhisperManager.reset()
+        isStopping = false
+        restartRequestedWhileStopping = false
+        instance = this
+        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     private fun finishStopOrRestart(stopStartId: Int) {

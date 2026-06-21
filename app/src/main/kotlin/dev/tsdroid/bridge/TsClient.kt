@@ -116,7 +116,14 @@ class TsClient {
                     val candidateNickname = nicknameWithCollisionSuffix(nickname, attempt)
                     var pendingClient: Client? = null
                     var pendingClientConnected = false
+                    var retrying = false
                     try {
+                        try {
+                            identity.setNickname(candidateNickname)
+                        } catch (e: Throwable) {
+                            if (e is CancellationException) throw e
+                            Log.w(TAG, "Failed to update identity nickname before connect", e)
+                        }
                         val c = Client(address, identity, candidateNickname, password, channel)
                         pendingClient = c
                         c.waitConnected()
@@ -136,6 +143,7 @@ class TsClient {
                             lastFailure = IllegalStateException("Nickname already in use: $candidateNickname")
                             closeClient(c, "nickname collision")
                             pendingClient = null
+                            retrying = true
                             continue
                         }
 
@@ -150,6 +158,7 @@ class TsClient {
                     } catch (e: Throwable) {
                         if (e is CancellationException) throw e
                         lastFailure = e
+                        retrying = true
                         Log.w(TAG, "Connection attempt failed with nickname '$candidateNickname'", e)
                     } finally {
                         pendingClient?.let {
@@ -159,13 +168,13 @@ class TsClient {
                                 destroyClient(it, "failed connection attempt before connected")
                             }
                         }
+                        if (retrying && attempt < MAX_NICKNAME_COLLISION_ATTEMPTS - 1) {
+                            delay(200)
+                        }
                     }
                 }
 
-                throw Exception(
-                    "Connection failed after trying unique nicknames",
-                    lastFailure,
-                )
+                throw Exception(lastFailure.userMessage() ?: "Server rejected the connection", lastFailure)
             } catch (e: Throwable) {
                 closeAfterNativeFailure()
                 if (e is CancellationException) throw e
@@ -175,6 +184,16 @@ class TsClient {
                 throw Exception("Connection failed: ${e.message ?: "Server busy or rejected"}", e)
             }
         }
+    }
+
+    private fun Throwable?.userMessage(): String? {
+        var current = this
+        var fallback: String? = null
+        while (current != null) {
+            current.message?.takeIf { it.isNotBlank() }?.let { fallback = it }
+            current = current.cause
+        }
+        return fallback
     }
 
     fun startEventLoop() {
