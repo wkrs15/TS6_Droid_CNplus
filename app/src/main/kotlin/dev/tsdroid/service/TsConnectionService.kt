@@ -411,14 +411,11 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e(TAG, "Connection error", e)
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(
-                        applicationContext,
-                        "Connection failed: ${e.message}",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                }
-                disconnect()
+                // Don't kill the service on connection failure — just clean up audio
+                // and let the ViewModel observe the DISCONNECTED state to handle UI.
+                // This prevents crash/race when the user retries immediately.
+                audioBridge.stopCapture()
+                WhisperManager.reset()
             }
         }
     }

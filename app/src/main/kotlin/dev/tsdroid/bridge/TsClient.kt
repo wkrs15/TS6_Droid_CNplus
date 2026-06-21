@@ -77,7 +77,7 @@ class TsClient {
     private val _serverInfo = MutableStateFlow<ServerInfo?>(null)
     val serverInfo: StateFlow<ServerInfo?> = _serverInfo.asStateFlow()
 
-    private val _commandErrors = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val _commandErrors = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 16)
     val commandErrors: SharedFlow<String> = _commandErrors.asSharedFlow()
 
     private val downloadCallbacks = ConcurrentHashMap<String, CompletableDeferred<ByteArray>>()

@@ -105,6 +105,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private var serviceConnection: ServiceConnection? = null
+    private var connectJob: kotlinx.coroutines.Job? = null
 
     fun connect(onConnected: () -> Unit) {
         val addr = address.value.trim()
@@ -138,14 +139,17 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
+        // Cancel any previous connection attempt to avoid stale collectors
+        connectJob?.cancel()
+
         // Wait for the service instance to be available
-        viewModelScope.launch {
+        connectJob = viewModelScope.launch {
             var attempts = 0
             while (TsConnectionService.instance == null && attempts < 50) {
                 kotlinx.coroutines.delay(100)
                 attempts++
             }
-            
+
             val service = TsConnectionService.instance
             if (service == null) {
                 _connectionState.value = ConnectionState.DISCONNECTED
@@ -160,14 +164,45 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                 service.connect(addr, identity, nick, pw)
                 // Note: The original code passed 'ch' to connect, but TsConnectionService.connect doesn't take a channel parameter.
                 // If channel joining is needed, it should be handled after connection.
-                
-                // Observe the actual connection state from the service
-                service.tsClient.state.collect { state ->
-                    _connectionState.value = state
-                    if (state == ConnectionState.CONNECTED) {
-                        onConnected()
+
+                // Observe the actual connection state from the service.
+                // We track whether we ever reached CONNECTED to distinguish
+                // "rejected before connecting" from "disconnected after being connected".
+                // Skip initial DISCONNECTED emission — only treat it as failure after
+                // we've observed CONNECTING (meaning the attempt actually started).
+                var wasConnected = false
+                var sawConnecting = false
+                val result = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
+                    service.tsClient.state.first { state ->
+                        _connectionState.value = state
+                        when {
+                            state == ConnectionState.CONNECTING -> {
+                                sawConnecting = true
+                                false // keep waiting
+                            }
+                            state == ConnectionState.CONNECTED -> {
+                                wasConnected = true
+                                true // terminal state — stop collecting
+                            }
+                            state == ConnectionState.DISCONNECTED && sawConnecting -> {
+                                true // terminal state — connection was rejected
+                            }
+                            else -> false // keep waiting
+                        }
                     }
                 }
+
+                if (wasConnected) {
+                    onConnected()
+                } else {
+                    // Either timed out or server rejected the connection
+                    _connectionState.value = ConnectionState.DISCONNECTED
+                    val errorMsg = service.tsClient.commandErrors.replayCache.lastOrNull()
+                    _error.value = errorMsg
+                        ?: getApplication<Application>().getString(R.string.connection_failed)
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _connectionState.value = ConnectionState.DISCONNECTED
                 _error.value = e.message ?: getApplication<Application>().getString(R.string.connection_failed)
