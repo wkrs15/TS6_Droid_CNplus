@@ -161,6 +161,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     val animeBackground: StateFlow<Boolean> = settingsStore.animeBackground
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val noiseSuppression: StateFlow<Boolean> = settingsStore.noiseSuppression
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     // File manager state
     private val _fileManagerOpen = MutableStateFlow(false)
     val fileManagerOpen: StateFlow<Boolean> = _fileManagerOpen.asStateFlow()
@@ -312,7 +315,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
             }
             // Start audio capture if not already running
             if (!service.audioBridge.isCapturing.value) {
-                service.audioBridge.startCapture(viewModelScope)
+                service.audioBridge.startCapture(viewModelScope, noiseSuppression.value)
             }
             // Apply persisted audio gain
             service.audioBridge.gainFactor = audioGain.value
@@ -631,6 +634,10 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAnimeBackground(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setAnimeBackground(enabled) }
+    }
+
+    fun setNoiseSuppression(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setNoiseSuppression(enabled) }
     }
 
     fun toggleVoiceMode() {

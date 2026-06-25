@@ -118,6 +118,7 @@ fun ServerScreen(
     val autoLoadImages by viewModel.autoLoadImages.collectAsState()
     val enableFloatingWindow by viewModel.enableFloatingWindow.collectAsState()
     val animeBackground by viewModel.animeBackground.collectAsState()
+    val noiseSuppression by viewModel.noiseSuppression.collectAsState()
     val mutedUserIds by viewModel.mutedUserIds.collectAsState()
     val fileManagerOpen by viewModel.fileManagerOpen.collectAsState()
     val fileList by viewModel.fileList.collectAsState()
@@ -197,6 +198,8 @@ fun ServerScreen(
             onEnableFloatingWindowChange = { viewModel.setEnableFloatingWindow(it) },
             animeBackground = animeBackground,
             onAnimeBackgroundChange = { viewModel.setAnimeBackground(it) },
+            noiseSuppression = noiseSuppression,
+            onNoiseSuppressionChange = { viewModel.setNoiseSuppression(it) },
             onDismiss = { showSettings = false },
             onNavigateToAbout = onNavigateToAbout
         )
@@ -727,6 +730,8 @@ private fun SettingsDialog(
     onEnableFloatingWindowChange: (Boolean) -> Unit,
     animeBackground: Boolean,
     onAnimeBackgroundChange: (Boolean) -> Unit,
+    noiseSuppression: Boolean,
+    onNoiseSuppressionChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onNavigateToAbout: () -> Unit,
 ) {
@@ -807,6 +812,21 @@ private fun SettingsDialog(
                     Switch(
                         checked = animeBackground,
                         onCheckedChange = onAnimeBackgroundChange,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.noise_suppression),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = noiseSuppression,
+                        onCheckedChange = onNoiseSuppressionChange,
                     )
                 }
                 Spacer(Modifier.height(16.dp))

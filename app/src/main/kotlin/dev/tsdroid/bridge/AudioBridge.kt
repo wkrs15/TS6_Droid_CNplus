@@ -9,6 +9,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import androidx.core.content.ContextCompat
 import dev.tslib.AudioConfig
@@ -53,6 +54,7 @@ class AudioBridge(
 
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
 
     private var captureJob: Job? = null
     private var playbackJob: Job? = null
@@ -98,7 +100,7 @@ class AudioBridge(
     }
 
     @SuppressLint("MissingPermission")
-    fun startCapture(scope: CoroutineScope) {
+    fun startCapture(scope: CoroutineScope, noiseSuppressionEnabled: Boolean = true) {
         if (_isCapturing.value) return
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -138,6 +140,18 @@ class AudioBridge(
         }
         audioRecord = record
         _isCapturing.value = true
+        noiseSuppressor?.release()
+        noiseSuppressor = null
+        if (noiseSuppressionEnabled && NoiseSuppressor.isAvailable()) {
+            try {
+                NoiseSuppressor.create(record.audioSessionId)?.also {
+                    noiseSuppressor = it
+                    Log.i(TAG, "NoiseSuppressor enabled (session=${record.audioSessionId})")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create NoiseSuppressor", e)
+            }
+        }
 
         captureJob = scope.launch(Dispatchers.IO) {
             val buffer = ShortArray(FRAME_SIZE_SAMPLES)
@@ -179,6 +193,8 @@ class AudioBridge(
             _isLocalVoiceActive.value = false
             val finishedRecord = audioRecord
             audioRecord = null
+            noiseSuppressor?.release()
+            noiseSuppressor = null
             try {
                 finishedRecord?.stop()
             } catch (_: Throwable) {
@@ -197,6 +213,8 @@ class AudioBridge(
         audioRecord?.stop()
         audioRecord?.release()
         audioRecord = null
+        noiseSuppressor?.release()
+        noiseSuppressor = null
     }
 
     private fun initAudioTrack() {
@@ -329,6 +347,8 @@ class AudioBridge(
         audioTrack?.stop()
         audioTrack?.release()
         audioTrack = null
+        noiseSuppressor?.release()
+        noiseSuppressor = null
         encoder?.close()
         encoder = null
         // Close per-user decoders
