@@ -188,7 +188,6 @@ class TsClient {
                 if (e is CancellationException) throw e
 
                 Log.e("TS6_CRASH_PREVENTION", "Connection failed; native client cleaned up", e)
-                _commandErrors.tryEmit("Connection failed. Please try again later.")
                 throw Exception("Connection failed: ${e.message ?: "Server busy or rejected"}", e)
             }
         }
