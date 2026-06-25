@@ -279,6 +279,8 @@ fun ConnectionScreen(
                             colors = CardDefaults.cardColors(
                                 containerColor = Color.White.copy(alpha = 0.6f),
                             ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                            tonalElevation = 0.dp,
                         ) {
                             Row(
                                 modifier = Modifier
