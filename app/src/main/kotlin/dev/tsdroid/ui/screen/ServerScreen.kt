@@ -210,14 +210,14 @@ fun ServerScreen(
 
         Scaffold(
             containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    title = { Text(serverInfo?.name ?: stringResource(R.string.server)) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                    ),
-                    actions = {
+        topBar = {
+            TopAppBar(
+                title = { Text(serverInfo?.name ?: stringResource(R.string.server)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                ),
+                actions = {
                     IconButton(onClick = { viewModel.toggleFileManager() }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.file_manager))
                     }
@@ -238,6 +238,10 @@ fun ServerScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -375,7 +379,9 @@ fun ServerScreen(
         },
     ) { padding ->
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
         ) {
             // Channel tree — full screen
             ChannelTree(
@@ -488,12 +494,13 @@ fun ServerScreen(
                     )
                 }
             }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatPanel(
+private fun ChatPanel(
     chatTab: Int,
     onTabChange: (Int) -> Unit,
     channelMessages: List<ChatMessage>,
@@ -718,7 +725,7 @@ fun ChatPanel(
 }
 
 @Composable
-fun SettingsDialog(
+private fun SettingsDialog(
     currentGain: Float,
     onGainChange: (Float) -> Unit,
     showLinkThumbnails: Boolean,
@@ -846,5 +853,6 @@ fun SettingsDialog(
             }
         },
     )
+    }
     }
 }
