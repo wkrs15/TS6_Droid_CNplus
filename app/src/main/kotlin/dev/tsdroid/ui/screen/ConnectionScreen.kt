@@ -153,15 +153,14 @@ fun ConnectionScreen(
 
         Scaffold(
             containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                ),
-                elevation = 0.dp,
-                actions = {
+            topBar = {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.app_name)) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    ),
+                    actions = {
                     Box {
                         TextButton(onClick = { languageMenuExpanded = true }) {
                             Text(selectedLanguage)
@@ -530,6 +529,5 @@ fun ConnectionScreen(
                 }
             }
         }
-    }
     }
 }

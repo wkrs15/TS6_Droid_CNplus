@@ -210,15 +210,14 @@ fun ServerScreen(
 
         Scaffold(
             containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text(serverInfo?.name ?: stringResource(R.string.server)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                ),
-                elevation = 0.dp,
-                actions = {
+            topBar = {
+                TopAppBar(
+                    title = { Text(serverInfo?.name ?: stringResource(R.string.server)) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    ),
+                    actions = {
                     IconButton(onClick = { viewModel.toggleFileManager() }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.file_manager))
                     }
@@ -238,6 +237,7 @@ fun ServerScreen(
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
+                Row(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -494,7 +494,7 @@ fun ServerScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatPanel(
+fun ChatPanel(
     chatTab: Int,
     onTabChange: (Int) -> Unit,
     channelMessages: List<ChatMessage>,
@@ -719,7 +719,7 @@ private fun ChatPanel(
 }
 
 @Composable
-private fun SettingsDialog(
+fun SettingsDialog(
     currentGain: Float,
     onGainChange: (Float) -> Unit,
     showLinkThumbnails: Boolean,
