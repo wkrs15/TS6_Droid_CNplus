@@ -107,14 +107,12 @@ jobs:
             echo 'EOF' >> $GITHUB_OUTPUT
           fi
 
-      - name: Verify APK exists
-        run: ls -la app/build/outputs/apk/release/app-release.apk
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: TS6 Droid ${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
-          files: app/build/outputs/apk/release/app-release.apk
+          files: app/build/outputs/apk/release/*.apk
           generate_release_notes: false
+          fail_on_unmatched_files: false
