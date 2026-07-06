@@ -1,12 +1,17 @@
 package dev.tsdroid.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -170,16 +175,30 @@ fun generateColorScheme(seed: Color, isDark: Boolean): androidx.compose.material
     }
 }
 
+/** Cache for generated color schemes keyed by (seedColor.toArgb(), darkTheme). */
+private val schemeCache = mutableMapOf<Pair<Int, Boolean>, androidx.compose.material3.ColorScheme>()
+
 @Composable
 fun TsDroidTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     seedColor: Color? = null,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (seedColor != null) {
-        generateColorScheme(seedColor, darkTheme)
+    val context = LocalContext.current
+    val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        // Android 12+: use Monet dynamic color from system wallpaper
+        remember(darkTheme) {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
     } else {
-        generateColorScheme(Color(0xFF6750A4), darkTheme)
+        // Older Android: fall back to custom HSL-generated scheme
+        val effectiveSeed = seedColor ?: Color(0xFF6750A4)
+        val cacheKey = effectiveSeed.toArgb() to darkTheme
+        remember(cacheKey) {
+            schemeCache.getOrPut(cacheKey) {
+                generateColorScheme(effectiveSeed, darkTheme)
+            }
+        }
     }
 
     MaterialTheme(

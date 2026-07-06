@@ -122,7 +122,6 @@ private fun PreviewSettingsDialog() {
                         "显示视频链接缩略图" to false,
                         "自动加载图片" to true,
                         "启用悬浮窗" to false,
-                        "我是二刺螈" to true,
                         "麦克风降噪" to true,
                     ).forEach { (label, checked) ->
                         Row(

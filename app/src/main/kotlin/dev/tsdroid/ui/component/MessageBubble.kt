@@ -1,5 +1,8 @@
 package dev.tsdroid.ui.component
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.text.Html
@@ -7,7 +10,9 @@ import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.text.style.URLSpan
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +39,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import dev.tsdroid.data.ChatMessage
+import dev.tsdroid.data.FileAttachment
 import dev.tsdroid.viewmodel.DownloadState
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
@@ -51,16 +58,28 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import android.widget.Toast
 import android.webkit.MimeTypeMap
 import androidx.compose.ui.unit.dp
 import dev.tsdroid.han.R
 import coil.compose.AsyncImage
 import dev.tslib.BBCode
-import dev.tsdroid.viewmodel.ChatMessage
-import dev.tsdroid.viewmodel.FileAttachment
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private fun relativeTime(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    return when {
+        diff < 60_000L -> "刚刚"
+        diff < 3600_000L -> "${diff / 60_000}分钟前"
+        diff < 86400_000L -> "${diff / 3600_000}小时前"
+        else -> {
+            val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+            fmt.format(Date(timestamp))
+        }
+    }
+}
 
 // Match BBCode [img]URL[/img]
 private val IMG_BBCODE = Regex("""\[img](.*?)\[/img]""", RegexOption.IGNORE_CASE)
@@ -99,6 +118,7 @@ private fun extractThumbnailUrl(url: String): String? {
     return null
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: ChatMessage,
@@ -108,7 +128,7 @@ fun MessageBubble(
     modifier: Modifier = Modifier,
 ) {
     val isMe = message.isMe
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val context = LocalContext.current
 
     val linkColor = MaterialTheme.colorScheme.primary
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -122,6 +142,17 @@ fun MessageBubble(
             .padding(
                 start = if (isMe) 48.dp else 0.dp,
                 end = if (isMe) 0.dp else 48.dp,
+            )
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    val text = message.text
+                    if (text.isNotBlank()) {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText(null, text))
+                        Toast.makeText(context, R.string.text_copied, Toast.LENGTH_SHORT).show()
+                    }
+                },
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (isMe)
@@ -180,7 +211,7 @@ fun MessageBubble(
             }
 
             Text(
-                text = timeFormat.format(Date(message.timestamp)),
+                text = relativeTime(message.timestamp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

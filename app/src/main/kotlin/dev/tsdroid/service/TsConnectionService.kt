@@ -58,7 +58,6 @@ import dev.tsdroid.TsDroidApp
 import dev.tsdroid.bridge.AudioBridge
 import dev.tsdroid.bridge.AvatarCache
 import dev.tsdroid.bridge.TsClient
-import dev.tsdroid.bridge.WhisperBridge
 import dev.tslib.Identity
 import dev.tslib.Channel
 import dev.tslib.User
@@ -68,10 +67,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import dev.tsdroid.data.SettingsStore
 
 class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -313,6 +315,7 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
                 }
             }
         }
+
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -401,11 +404,25 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         val serverName = tsClient.serverInfo.value?.name ?: getString(R.string.connecting)
         val muteLabel = getString(if (audioBridge.isMuted.value) R.string.notif_unmute else R.string.notif_mute)
 
+        // Build a more informative notification body
+        val myId = tsClient.clientId
+        val allUsers = tsClient.users.value ?: emptyList()
+        val userCount = allUsers.size
+        val currentChannel = if (myId != null) {
+            val myUser = allUsers.find { it.id == myId }
+            val channelId = myUser?.channelId ?: 0L
+            tsClient.channels.value?.find { it.id == channelId }?.name
+        } else null
+        val channelInfo = if (currentChannel != null) "〈$currentChannel〉" else getString(R.string.connecting)
+        val bodyText = "$channelInfo | $userCount ${if (userCount > 1) "人在线" else "人在线"}"
+
         return NotificationCompat.Builder(this, TsDroidApp.CHANNEL_ID_CONNECTION)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(serverName)
+            .setContentTitle(serverName)
+            .setContentText(bodyText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bodyText))
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(contentIntent)
+            .setOngoing(true)
             .setOngoing(true)
             .addAction(0, muteLabel, muteIntent)
             .addAction(0, getString(R.string.disconnect), disconnectIntent)
@@ -426,16 +443,16 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         isIntentionalDisconnect = false
         return try {
             tsClient.connect(address, identity, nickname, password)
-            audioBridge.startCapture(serviceScope)
-            // Sync initial mute state with server
-            if (audioBridge.isMuted.value) {
-                tsClient.setInputMuted(true)
+            // Read noise suppression setting and pass to capture
+            val noiseEnabled = runBlocking(Dispatchers.IO) {
+                try {
+                    SettingsStore(this@TsConnectionService).noiseSuppression.first()
+                } catch (_: Exception) { true }
             }
+            audioBridge.startCapture(serviceScope, noiseEnabled)
             // Start event loop
             tsClient.startEventLoop()
-            // Initialize whisper manager
-            WhisperManager.init(tsClient)
-            WhisperBridge.tryLoad()
+            // Service initialized
             null
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -472,13 +489,11 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         }
         hideFloatingWindow()
         audioBridge.stopCapture()
-        WhisperManager.reset()
     }
 
     private fun cleanupFailedConnection() {
         hideFloatingWindow()
         audioBridge.stopCapture()
-        WhisperManager.reset()
         isStopping = false
         restartRequestedWhileStopping = false
         instance = this
@@ -716,7 +731,6 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         serviceViewModelStore.clear()
         hideFloatingWindow()
         audioBridge.stopCapture()
-        WhisperManager.reset()
         try {
             tsClient.disconnect()
         } catch (e: Throwable) {

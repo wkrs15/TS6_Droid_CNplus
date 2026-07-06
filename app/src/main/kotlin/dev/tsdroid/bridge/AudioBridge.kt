@@ -9,6 +9,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -55,6 +57,8 @@ class AudioBridge(
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
     private var noiseSuppressor: NoiseSuppressor? = null
+    private var automaticGainControl: AutomaticGainControl? = null
+    private var acousticEchoCanceler: AcousticEchoCanceler? = null
 
     private var captureJob: Job? = null
     private var playbackJob: Job? = null
@@ -66,7 +70,10 @@ class AudioBridge(
     )
 
     @Volatile
-    var gainFactor: Float = 1.0f
+    var outputGainFactor: Float = 1.0f
+
+    @Volatile
+    var inputGainFactor: Float = 1.0f
 
     @Volatile
     private var mutedUserIds: Set<Int> = emptySet()
@@ -140,19 +147,49 @@ class AudioBridge(
         }
         audioRecord = record
         _isCapturing.value = true
+
+        // Release any previous audio effects
         noiseSuppressor?.release()
         noiseSuppressor = null
-        if (noiseSuppressionEnabled && NoiseSuppressor.isAvailable()) {
-            try {
-                NoiseSuppressor.create(record.audioSessionId)?.also {
-                    noiseSuppressor = it
-                    Log.i(TAG, "NoiseSuppressor enabled (session=${record.audioSessionId})")
+        automaticGainControl?.release()
+        automaticGainControl = null
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
+
+        if (noiseSuppressionEnabled) {
+            val sessionId = record.audioSessionId
+            if (NoiseSuppressor.isAvailable()) {
+                try {
+                    NoiseSuppressor.create(sessionId)?.also {
+                        noiseSuppressor = it
+                        Log.i(TAG, "NoiseSuppressor enabled")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to create NoiseSuppressor", e)
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to create NoiseSuppressor", e)
+            }
+            if (AutomaticGainControl.isAvailable()) {
+                try {
+                    AutomaticGainControl.create(sessionId)?.also {
+                        automaticGainControl = it
+                        Log.i(TAG, "AutomaticGainControl enabled")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to create AutomaticGainControl", e)
+                }
+            }
+            if (AcousticEchoCanceler.isAvailable()) {
+                try {
+                    AcousticEchoCanceler.create(sessionId)?.also {
+                        acousticEchoCanceler = it
+                        Log.i(TAG, "AcousticEchoCanceler enabled")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to create AcousticEchoCanceler", e)
+                }
             }
         } else {
-            Log.i(TAG, "NoiseSuppressor skipped: enabled=$noiseSuppressionEnabled, available=${NoiseSuppressor.isAvailable()}")
+            Log.i(TAG, "Noise suppression disabled")
         }
 
         captureJob = scope.launch(Dispatchers.IO) {
@@ -181,7 +218,18 @@ class AudioBridge(
                     val rms = Math.sqrt(energy.toDouble() / read)
                     val isVoiceActive = rms > 150.0 // Adjusted threshold for voice activity
                     _isLocalVoiceActive.value = isVoiceActive
-                    
+
+                    // Apply input gain (mic volume boost)
+                    val inGain = inputGainFactor
+                    if (inGain > 1.0f) {
+                        for (i in 0 until read) {
+                            var v = (buffer[i] * inGain).toInt()
+                            if (v > 32767) v = 32767
+                            else if (v < -32768) v = -32768
+                            buffer[i] = v.toShort()
+                        }
+                    }
+
                     val pcmBytes = shortsToBytes(buffer)
                     try {
                         val encoded = codec.encode(pcmBytes)
@@ -197,6 +245,14 @@ class AudioBridge(
             audioRecord = null
             noiseSuppressor?.release()
             noiseSuppressor = null
+        automaticGainControl?.release()
+        automaticGainControl = null
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
+            automaticGainControl?.release()
+            automaticGainControl = null
+            acousticEchoCanceler?.release()
+            acousticEchoCanceler = null
             try {
                 finishedRecord?.stop()
             } catch (_: Throwable) {
@@ -217,6 +273,10 @@ class AudioBridge(
         audioRecord = null
         noiseSuppressor?.release()
         noiseSuppressor = null
+        automaticGainControl?.release()
+        automaticGainControl = null
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
     }
 
     private fun initAudioTrack() {
@@ -278,7 +338,7 @@ class AudioBridge(
                 }
 
                 if (hasData) {
-                    val gain = gainFactor
+                    val gain = outputGainFactor
                     if (gain != 1.0f) {
                         for (i in mixBuffer.indices) {
                             mixBuffer[i] = (mixBuffer[i] * gain).toInt()
@@ -351,6 +411,14 @@ class AudioBridge(
         audioTrack = null
         noiseSuppressor?.release()
         noiseSuppressor = null
+        automaticGainControl?.release()
+        automaticGainControl = null
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
+        automaticGainControl?.release()
+        automaticGainControl = null
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
         encoder?.close()
         encoder = null
         // Close per-user decoders

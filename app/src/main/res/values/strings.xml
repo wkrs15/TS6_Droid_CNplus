@@ -40,13 +40,19 @@
     <!-- ServerScreen -->
     <string name="server">Serveur</string>
     <string name="disconnect">Déconnexion</string>
+    <string name="disconnect_confirm">Se déconnecter du serveur ?</string>
+    <string name="copy_text">Copier le texte</string>
+    <string name="text_copied">Copié dans le presse-papier</string>
     <string name="settings">Paramètres</string>
     <string name="audio_gain">Gain audio</string>
     <string name="audio_gain_value">×%1$.1f</string>
+    <string name="audio_gain_desc">Amplifie le son des autres, pas votre micro</string>
+    <string name="input_gain">Gain micro</string>
+    <string name="input_gain_value">×%1$.1f</string>
+    <string name="input_gain_desc">Amplifie votre micro pour que les autres vous entendent mieux</string>
     <string name="show_link_thumbnails">Miniatures des liens vidéo</string>
     <string name="auto_load_images">Charger les images automatiquement</string>
     <string name="enable_floating_window">Activer la fenêtre flottante</string>
-    <string name="anime_background">Fond animé aléatoire</string>
     <string name="noise_suppression">Réduction de bruit du micro</string>
     <string name="chat">Chat</string>
     <string name="push_to_talk">Appuyer pour parler</string>
@@ -59,13 +65,7 @@
     <string name="tab_home">Accueil</string>
     <string name="tab_settings">Paramètres</string>
     <string name="no_connection">Aucune connexion</string>
-    <string name="wallpaper_cache_size">Cache fond d\'écran : %1$s Mo (%2$d images)</string>
-    <string name="wallpaper_max_cache">Cache max : %1$d Mo</string>
-    <string name="wallpaper_view_cache">Voir le cache des fonds d\'écran</string>
-    <string name="wallpaper_cache_images">fonds d\'écran</string>
-    <string name="wallpaper_clear_cache">Vider le cache des fonds d\'écran</string>
-    <string name="wallpaper_clear_cache_confirm">Êtes-vous sûr de vouloir vider tout le cache des fonds d\'écran ? Cette action est irréversible.</string>
-    <string name="wallpaper_cache_empty">Aucun fond d\'écran en cache</string>
+    <string name="tap_add_hint">Appuyez sur + pour ajouter un serveur</string>
     <string name="confirm">Confirmer</string>
     <string name="update_check">Vérifier les mises à jour</string>
     <string name="update_found">Nouvelle version disponible</string>

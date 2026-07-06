@@ -1,7 +1,6 @@
 package dev.tsdroid.viewmodel
 
 import android.app.Application
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
@@ -28,6 +27,7 @@ import dev.tslib.ConnectionState
 import dev.tslib.Identity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,18 +53,25 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     val autoReconnect: StateFlow<Boolean> = bookmarkStore.autoReconnect
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val address = MutableStateFlow("")
-    val nickname = MutableStateFlow("")
-    val password = MutableStateFlow("")
-    val channel = MutableStateFlow("")
+    private val _address = MutableStateFlow("")
+    val address: StateFlow<String> = _address.asStateFlow()
+    private val _nickname = MutableStateFlow("")
+    val nickname: StateFlow<String> = _nickname.asStateFlow()
+    private val _password = MutableStateFlow("")
+    val password: StateFlow<String> = _password.asStateFlow()
+    private val _channel = MutableStateFlow("")
+    val channel: StateFlow<String> = _channel.asStateFlow()
 
     /** Index du favori en cours d'édition, ou -1 si ajout. */
     private val _editingIndex = MutableStateFlow(-1)
     val editingIndex: StateFlow<Int> = _editingIndex.asStateFlow()
 
-    val browsedChannels = MutableStateFlow<List<Channel>>(emptyList())
-    val isBrowsing = MutableStateFlow(false)
-    val showChannelPicker = MutableStateFlow(false)
+    private val _browsedChannels = MutableStateFlow<List<Channel>>(emptyList())
+    val browsedChannels: StateFlow<List<Channel>> = _browsedChannels.asStateFlow()
+    private val _isBrowsing = MutableStateFlow(false)
+    val isBrowsing: StateFlow<Boolean> = _isBrowsing.asStateFlow()
+    private val _showChannelPicker = MutableStateFlow(false)
+    val showChannelPicker: StateFlow<Boolean> = _showChannelPicker.asStateFlow()
 
     private val _bookmarkIcons = MutableStateFlow<Map<Long, ImageBitmap>>(emptyMap())
     val bookmarkIcons: StateFlow<Map<Long, ImageBitmap>> = _bookmarkIcons.asStateFlow()
@@ -116,6 +123,8 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
+        val context = getApplication<Application>()
+
         val existingService = TsConnectionService.instance
         if (existingService?.hasActiveConnection(addr) == true) {
             _connectionState.value = ConnectionState.CONNECTED
@@ -126,8 +135,6 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
         _connectionState.value = ConnectionState.CONNECTING
         _error.value = null
-
-        val context = getApplication<Application>()
 
         // Check for overlay permission before starting the service
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
@@ -203,10 +210,10 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun connectBookmark(bookmark: ServerBookmark, onConnected: () -> Unit) {
-        address.value = bookmark.address
-        nickname.value = bookmark.nickname
-        password.value = bookmark.password ?: ""
-        channel.value = bookmark.channel ?: ""
+        _address.value = bookmark.address
+        _nickname.value = bookmark.nickname
+        _password.value = bookmark.password ?: ""
+        _channel.value = bookmark.channel ?: ""
         viewModelScope.launch {
             try {
                 bookmarkStore.saveLastBookmarkAddress(bookmark.address)
@@ -226,8 +233,21 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             if (lastAddr.isEmpty()) return@launch
             val list = bookmarkStore.bookmarks.first()
             val bookmark = list.find { it.address == lastAddr } ?: return@launch
-            connectBookmark(bookmark, onConnected)
+            // Retry connection with backoff: 1s, 3s, 10s, 30s
+            val delays = listOf(1000L, 3000L, 10000L, 30000L)
+            for (retryDelay in delays) {
+                if (TsConnectionService.instance?.hasActiveConnection() == true) return@launch
+                kotlinx.coroutines.delay(retryDelay)
+                // Reset flag so connectBookmark can work
+                autoReconnectAttempted = false
+                connectBookmark(bookmark, onConnected)
+            }
         }
+    }
+
+    /** Reset auto-reconnect state so it can try again on next disconnect. */
+    fun resetAutoReconnect() {
+        autoReconnectAttempted = false
     }
 
     fun setAutoReconnect(enabled: Boolean) {
@@ -261,10 +281,10 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun editBookmark(bookmark: ServerBookmark, index: Int) {
-        address.value = bookmark.address
-        nickname.value = bookmark.nickname
-        password.value = bookmark.password ?: ""
-        channel.value = bookmark.channel ?: ""
+        _address.value = bookmark.address
+        _nickname.value = bookmark.nickname
+        _password.value = bookmark.password ?: ""
+        _channel.value = bookmark.channel ?: ""
         _editingIndex.value = index
     }
 
@@ -273,12 +293,19 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         clearFields()
     }
 
+    fun updateAddress(value: String) { _address.value = value }
+    fun updateNickname(value: String) { _nickname.value = value }
+    fun updatePassword(value: String) { _password.value = value }
+    fun updateChannel(value: String) { _channel.value = value }
+
+    fun dismissChannelPicker() { _showChannelPicker.value = false }
+
     private fun clearFields() {
         _editingIndex.value = -1
-        address.value = ""
-        nickname.value = ""
-        password.value = ""
-        channel.value = ""
+        _address.value = ""
+        _nickname.value = ""
+        _password.value = ""
+        _channel.value = ""
     }
 
     fun browseChannels() {
@@ -289,7 +316,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        isBrowsing.value = true
+        _isBrowsing.value = true
         _error.value = null
 
         viewModelScope.launch {
@@ -318,7 +345,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                                 c.processEvents()
                                 val raw = c.channels
                                 if (raw != null && raw.isNotEmpty()) break
-                                Thread.sleep(20)
+                                delay(20)
                             }
 
                             if (hasNicknameCollision(c.users, c.clientId, candidateNick)) {
@@ -345,12 +372,12 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                         lastFailure,
                     )
                 }
-                browsedChannels.value = channels
-                showChannelPicker.value = true
+                _browsedChannels.value = channels
+                _showChannelPicker.value = true
             } catch (e: Exception) {
                 _error.value = e.message ?: getApplication<Application>().getString(R.string.browse_failed)
             } finally {
-                isBrowsing.value = false
+                _isBrowsing.value = false
             }
         }
     }
@@ -360,21 +387,21 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         val tree = ChannelTree.fromChannels(channels.toTypedArray())
         val path = tree.pathTo(channelId)
         tree.close()
-        channel.value = path.joinToString("/") { it.name }
-        showChannelPicker.value = false
+        _channel.value = path.joinToString("/") { it.name }
+        _showChannelPicker.value = false
     }
 
     fun clearError() {
         _error.value = null
     }
 
-    private fun disconnectAndClose(client: Client) {
+    private suspend fun disconnectAndClose(client: Client) {
         try {
             client.disconnect()
             val flushEnd = System.currentTimeMillis() + 500
             while (System.currentTimeMillis() < flushEnd) {
                 client.processEvents()
-                Thread.sleep(20)
+                delay(20)
             }
         } catch (_: Throwable) {
         } finally {

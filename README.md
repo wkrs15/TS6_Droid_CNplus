@@ -6,24 +6,70 @@
 
 ---
 
-## 项目演示
-
-<div align="center">
-<table>
-  <tr>
-    <td align="center"><img src="img/screenshow1.jpg" width="240"/></td>
-    <td align="center"><img src="img/screenshow2.jpg" width="240"/></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="img/screenshow3.jpg" width="240"/></td>
-    <td align="center"><img src="img/screenshow4.jpg" width="240"/></td>
-  </tr>
-</table>
-</div>
-
----
-
 ## 更新日志
+
+### v2.2.0-Han（2026-07-05）— 代码优化与用户体验改进
+
+**新功能**
+- **🎨 Material You 莫奈取色**：Android 12+ 自动跟随系统壁纸主题色，低于 12 的机型回退默认紫色
+- **📅 聊天日期分组**：消息列表按天显示「今天」「昨天」等日期分隔标签
+- **📳 PTT 振动反馈**：按住说话按键时伴随振动，松手再次振动
+- **⌨️ Enter 发送**：聊天输入框按键盘 Enter 直接发送消息
+- **➕ 空状态引导**：无服务器书签时显示「点右下角 + 添加服务器」提示
+- **📋 私信排序**：私信列表按最后消息时间降序排列，最新对话置顶
+- **🔊 输入/输出增益分离**：新增「麦克风增益」滑块，与原「听筒增益」独立调节
+- **📳 屏幕旋转保持**：旋转屏幕不再重建 Activity，连接和聊天状态保持
+- **🔄 仓库信息更新**：更新检测、关于页链接、贡献者 API 均指向 wkrs15 仓库
+
+**体验优化**
+- **长按复制消息**：聊天气泡支持长按复制文本到剪贴板，附带 Toast 反馈提示
+- **断连确认弹窗**：点击断开连接按钮弹出二次确认对话框，防止误触
+- **聊天输入框自动聚焦**：打开聊天面板自动弹出键盘并聚焦输入框，免去手动点击
+- **断连自动返回**：服务端断开连接后自动回到连接页面，不再卡在空白页
+- **启动加速**：去除二次元壁纸功能，SplashScreen 简化为 600ms 快速启动，不再等待网络加载
+- **设置页精简**：移除「我是二刺螈」开关与壁纸缓存管理，设置页更清爽
+- **PTT 模式切换修复**：VA 模式的大按钮仅控制麦克风静音，不再强制切回 PTT 模式；模式切换只由小按钮控制
+
+**Bug 修复**
+- 修复签名密码硬编码在版本控制中的安全问题，改由环境变量读取
+- 修复 `MainActivity.kt` 中 2 处 `runBlocking` 阻塞主线程导致的 ANR 风险
+- 修复 `TsClient.launchNativeCommand` 中并发 `closeAfterNativeFailure` 导致的空指针异常
+- 修复 `ConnectionViewModel` 中 `StateFlow` 被 UI 层直接修改 `.value` 导致的不可预测状态
+- 修复 PTT/VA 模式反复切换后误触发静音的问题
+- 修复退出服务器卡顿问题：去掉 800ms 多余延迟，缩短至 200ms
+
+**性能优化**
+- **HSL 色板缓存**：`generateColorScheme` 首次计算后缓存 `(seedColor, darkTheme)` → `ColorScheme`，避免每次重组重新计算
+- **ProGuard/R8 开启**：Release 编译启用代码混淆 + 资源压缩，APK 体积显著减小
+- **CI 缓存**：GitHub Actions 工作流新增 Gradle 构建缓存，显著加速 CI 编译速度
+- **NDK 路径自动检测**：`buildRustLibs` 任务自动查找已安装的最新 NDK 版本，不再硬编码版本号，换电脑无需修改
+- **书签列表 LazyColumn**：服务端列表改用 `LazyColumn` 虚拟滚动，书签数量多时不再卡顿
+- **Thread.sleep → delay**：`ConnectionViewModel.browseChannels()` 和 `disconnectAndClose()` 中阻塞线程的 `Thread.sleep` 替换为协程 `delay`，避免占用 IO 线程
+- **离线缓存**：频道列表和用户列表自动缓存到本地文件，重连后立即显示缓存数据，不再空白等待
+- **文件管理器多选下载**：新增多选模式，可勾选多个文件批量下载，无需逐个点击
+- **通知栏增强**：通知标题改为服务器名，内容显示当前频道和在线人数（如「〈默认频道〉| 12 人在线」）
+- **消息时间相对显示**：1分钟内显示「刚刚」，1小时内「N分钟前」，更久显示「MM-dd HH:mm」
+- **返回键优化**：聊天打开时按返回优先关闭聊天，不再直接退出服务器
+- **心跳检测**：每 500ms 检查连接状态，断网后秒变红球
+- **自动重连增强**：断线后按 1s → 3s → 10s → 30s 递增重试
+
+**代码重构**
+- **手写 JSON 替换为 kotlinx.serialization**：`MessageStore` 移除 263 行手写 JSON 解析/拼接代码，改用 kotlinx.serialization，自动兼容旧格式文件
+- **StateFlow 封装**：`ConnectionViewModel` 中 4 个公开 `MutableStateFlow` 改为私有 `_xxx` + 公有 `StateFlow` + setter 方法，禁止 UI 直接赋值
+- **下载方法统一**：`ServerViewModel` 中 3 处重复的下载逻辑（`downloadAttachment` / `downloadFileFromManager` / `previewImageFile`）抽取为 `downloadFileInternal` 共用方法
+- **新增 Messages.kt 数据模型**：将 `ChatMessage`、`FileAttachment` 从 ViewModel 移至 `data` 包，统一序列化注解
+- **移除大量未使用 import**：多处文件清理无用引用
+
+**依赖升级**
+- AGP `8.7.3` → `8.8.0`
+- Compose BOM `2024.12.01` → `2025.06.00`
+- DataStore `1.1.1` → `1.1.4`
+- 新增 `kotlinx-serialization-json:1.7.3`
+
+**编译优化**
+- Rust NDK 编译新增 `armeabi-v7a` 架构支持，覆盖更多老旧设备
+- Gradle wrapper 镜像改为国内腾讯云源，解决 `services.gradle.org` 连接超时问题
+- `release.keystore` 密码优先读取 CI 环境变量 `KEYSTORE_PASSWORD`，本地开发回退默认值
 
 ### v2.1.0-Han（2026-06-27）
 
@@ -164,6 +210,6 @@ keytool -genkey -v -keystore release.keystore -alias ts6droid -keyalg RSA -keysi
 
 感谢所有为本项目做出贡献的开发者！
 
-<a href="https://github.com/YUAXI/TS6_Droid_CN/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=YUAXI/TS6_Droid_CN" />
+<a href="https://github.com/wkrs15/TS6_Droid_CNplus/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=wkrs15/TS6_Droid_CNplus" />
 </a>

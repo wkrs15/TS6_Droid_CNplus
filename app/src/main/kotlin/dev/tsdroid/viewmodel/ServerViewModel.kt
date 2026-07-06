@@ -24,11 +24,13 @@ import dev.tsdroid.bridge.IconCache
 import dev.tsdroid.bridge.TsClient
 import dev.tsdroid.bridge.TsFileEntry
 import dev.tsdroid.han.R
-import dev.tsdroid.data.BookmarkStore
+import dev.tsdroid.data.ChatMessage
+import dev.tsdroid.data.FileAttachment
 import dev.tsdroid.data.MessageStore
+import dev.tsdroid.data.ServerCache
 import dev.tsdroid.data.SettingsStore
+import dev.tsdroid.data.BookmarkStore
 import dev.tsdroid.service.TsConnectionService
-import dev.tsdroid.service.WhisperManager
 import dev.tslib.Channel
 import dev.tslib.ConnectionState
 import dev.tslib.Event
@@ -45,24 +47,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-data class FileAttachment(
-    val fileName: String,
-    val fileSize: Long,
-    val fileId: String,
-    val isImage: Boolean,
-    val channelId: Long = 0L,
-)
-
-data class ChatMessage(
-    val sender: String,
-    val text: String,
-    val timestamp: Long = System.currentTimeMillis(),
-    val isMe: Boolean = false,
-    val isPrivate: Boolean = false,
-    val senderId: Int = 0,
-    val fileAttachment: FileAttachment? = null,
-)
 
 sealed class DownloadState {
     data object Idle : DownloadState()
@@ -96,6 +80,8 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private var audioBridge: AudioBridge? = null
     private var connectionService: TsConnectionService? = null
 
+    private val serverCache = ServerCache(application)
+
     private val _channels = MutableStateFlow<List<Channel>>(emptyList())
     val channels: StateFlow<List<Channel>> = _channels.asStateFlow()
 
@@ -112,9 +98,6 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val _mutedUserIds = MutableStateFlow<Set<Int>>(emptySet())
     val mutedUserIds: StateFlow<Set<Int>> = _mutedUserIds.asStateFlow()
 
-    // Whisper (密聊) state — bridged from WhisperManager
-
-    // Users with isTalking patched from talk status events
     private val _users = MutableStateFlow<List<User>>(emptyList())
     val users: StateFlow<List<User>> = _users.asStateFlow()
 
@@ -153,6 +136,8 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     val audioGain: StateFlow<Float> = settingsStore.audioGain
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
+    val inputGain: StateFlow<Float> = settingsStore.inputGain
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
 
     val showLinkThumbnails: StateFlow<Boolean> = settingsStore.showLinkThumbnails
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -161,9 +146,6 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val enableFloatingWindow: StateFlow<Boolean> = settingsStore.enableFloatingWindow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
-    val animeBackground: StateFlow<Boolean> = settingsStore.animeBackground
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val noiseSuppression: StateFlow<Boolean> = settingsStore.noiseSuppression
@@ -265,17 +247,36 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
             connectionService = service
             queriedPermChannels.clear()
 
+            // Load offline cache immediately (before live data arrives)
+            val cachedAddr = service.tsClient.serverAddress
+            if (cachedAddr != null) {
+                serverCache.loadChannels(cachedAddr)?.let { cached ->
+                    _channels.value = cached
+                    Log.i(TAG, "Loaded ${cached.size} channels from offline cache")
+                }
+                serverCache.loadUsers(cachedAddr)?.let { cached ->
+                    _rawUsers.value = cached
+                    Log.i(TAG, "Loaded ${cached.size} users from offline cache")
+                }
+            }
+
             viewModelScope.launch {
                 service.tsClient.channels.collect { channels ->
                     Log.d(TAG, "Channels updated: ${channels.size}")
                     _channels.value = channels
                     loadChannelIcons(channels)
+                    // Save to offline cache
+                    val addr = serverAddress ?: service.tsClient.serverAddress
+                    if (addr != null) serverCache.saveChannels(addr, channels)
                 }
             }
             viewModelScope.launch {
                 service.tsClient.users.collect {
                     _rawUsers.value = it
                     loadAvatars(it)
+                    // Save to offline cache
+                    val addr = serverAddress ?: service.tsClient.serverAddress
+                    if (addr != null) serverCache.saveUsers(addr, it)
                 }
             }
             viewModelScope.launch {
@@ -323,11 +324,17 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 service.audioBridge.startCapture(viewModelScope, noiseSuppression.value)
             }
             // Apply persisted audio gain
-            service.audioBridge.gainFactor = audioGain.value
+            service.audioBridge.outputGainFactor = audioGain.value
+            service.audioBridge.inputGainFactor = inputGain.value
             // Observe audio gain changes and apply live
             viewModelScope.launch {
                 audioGain.collect { gain ->
-                    service.audioBridge.gainFactor = gain
+                    service.audioBridge.outputGainFactor = gain
+                }
+            }
+            viewModelScope.launch {
+                inputGain.collect { gain ->
+                    service.audioBridge.inputGainFactor = gain
                 }
             }
             // Observe audio state for local talking status
@@ -472,10 +479,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                                     
                                     // Safely create and add message
                                     val msg = ChatMessage(
-                                        sender = sender, 
-                                        text = displayText, 
-                                        isPrivate = true, 
-                                        senderId = id, 
+                                        sender = sender,
+                                        text = displayText,
+                                        senderId = id,
                                         fileAttachment = attachment
                                     )
                                     
@@ -601,7 +607,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         if (text.isBlank()) return
         tsClient?.sendPrivateMessage(userId, text)
         val msg = ChatMessage(
-            sender = getApplication<Application>().getString(R.string.me_sender), text = text, isMe = true, isPrivate = true, senderId = userId,
+            sender = getApplication<Application>().getString(R.string.me_sender), text = text, isMe = true, senderId = userId,
         )
         val current = _privateMessages.value.toMutableMap()
         current[userId] = (current[userId] ?: emptyList()) + msg
@@ -609,26 +615,18 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         scheduleSave()
     }
 
-    // ── Whisper (密聊) ──────────────────────────────────────────
-
-    fun toggleWhisper(userId: Int) {
-        WhisperManager.toggleWhisper(userId)
-    }
-
-    fun sendWhisperMessage(text: String) {
-        WhisperManager.sendWhisperMessage(text)
-    }
-
-    val whisperCandidateUsers: List<User>
-        get() = _users.value.filter { it.id != tsClient?.clientId }
-
     fun moveToChannel(channelId: Long) {
         tsClient?.moveToChannel(channelId)
     }
 
     fun setAudioGain(gain: Float) {
-        audioBridge?.gainFactor = gain
+        audioBridge?.outputGainFactor = gain
         viewModelScope.launch { settingsStore.setAudioGain(gain) }
+    }
+
+    fun setInputGain(gain: Float) {
+        audioBridge?.inputGainFactor = gain
+        viewModelScope.launch { settingsStore.setInputGain(gain) }
     }
 
     fun setShowLinkThumbnails(enabled: Boolean) {
@@ -643,9 +641,6 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { settingsStore.setEnableFloatingWindow(enabled) }
     }
 
-    fun setAnimeBackground(enabled: Boolean) {
-        viewModelScope.launch { settingsStore.setAnimeBackground(enabled) }
-    }
 
     fun setNoiseSuppression(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setNoiseSuppression(enabled) }
@@ -656,6 +651,11 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         _isPttMode.value = newPttMode
         // When switching to PTT mode, mute. When switching to VA, unmute.
         audioBridge?.setMuted(newPttMode)
+    }
+
+    /** Toggle mic mute without changing PTT/VA mode (used in VA mode's mute button). */
+    fun toggleMicMute() {
+        audioBridge?.let { it.setMuted(!it.isMuted.value) }
     }
 
     fun toggleOutputMute() {
@@ -704,7 +704,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
                 if (isPrivate && targetId != null) {
                     tsClient?.sendPrivateMessage(targetId, ts3Url)
-                    val msg = ChatMessage(sender = meSender, text = fileName, isMe = true, isPrivate = true, senderId = targetId, fileAttachment = attachment)
+                    val msg = ChatMessage(sender = meSender, text = fileName, isMe = true, senderId = targetId, fileAttachment = attachment)
                     val current = _privateMessages.value.toMutableMap()
                     current[targetId] = (current[targetId] ?: emptyList()) + msg
                     _privateMessages.value = current
@@ -901,7 +901,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
             tsClient?.sendPrivateMessage(targetUserId, ts3Url)
             val msg = ChatMessage(
                 sender = meSender, text = fileName, isMe = true,
-                isPrivate = true, senderId = targetUserId, fileAttachment = attachment,
+                senderId = targetUserId, fileAttachment = attachment,
             )
             val current = _privateMessages.value.toMutableMap()
             current[targetUserId] = (current[targetUserId] ?: emptyList()) + msg
@@ -915,26 +915,41 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         scheduleSave()
     }
 
+    /**
+     * Unified file download helper: checks disk cache, downloads if needed, caches result.
+     * @param onResult callback with (bytes, wasCached) on success, or null if download failed.
+     */
+    private fun downloadFileInternal(
+        host: String,
+        serverPath: String,
+        fileName: String,
+        channelId: Long,
+        onResult: suspend (ByteArray, Boolean) -> Unit,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cachePath = "${host}/$fileName"
+            val cached = fileCache.get(host, fileName)
+            val bytes = cached ?: tsClient?.downloadFile(channelId, serverPath)
+            if (bytes != null) {
+                if (cached == null) {
+                    fileCache.put(host, fileName, bytes)
+                }
+                onResult(bytes, cached != null)
+            }
+        }
+    }
+
     fun downloadFileFromManager(fileName: String) {
         val client = tsClient ?: return
         val channelId = currentChannelId()
         val currentPath = _currentFilePath.value
         val fullName = currentPath.trimStart('/') + fileName
         val host = serverAddress?.substringBefore(':') ?: "unknown"
-        val cachePath = fullName.trimStart('/')
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val cached = fileCache.get(host, cachePath)
-            val bytes = cached ?: client.downloadFile(channelId, "/$fullName")
-            if (bytes != null) {
-                if (cached == null) {
-                    fileCache.put(host, cachePath, bytes)
-                }
-                val dlUri = saveToDownloads(fileName, bytes)
-                if (dlUri != null) {
-                    withContext(Dispatchers.Main) {
-                        openFileUri(dlUri, fileName)
-                    }
+        downloadFileInternal(host, "/$fullName", fullName.trimStart('/'), channelId) { bytes, _ ->
+            val dlUri = saveToDownloads(fileName, bytes)
+            if (dlUri != null) {
+                withContext(Dispatchers.Main) {
+                    openFileUri(dlUri, fileName)
                 }
             }
         }
@@ -946,18 +961,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         val currentPath = _currentFilePath.value
         val fullName = currentPath.trimStart('/') + fileName
         val host = serverAddress?.substringBefore(':') ?: "unknown"
-        val cachePath = fullName.trimStart('/')
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val cached = fileCache.get(host, cachePath)
-            val bytes = cached ?: client.downloadFile(channelId, "/$fullName")
-            if (bytes != null) {
-                if (cached == null) {
-                    fileCache.put(host, cachePath, bytes)
-                }
-                _previewImageBytes.value = bytes
-                _previewImageName.value = fileName
-            }
+        downloadFileInternal(host, "/$fullName", fullName.trimStart('/'), channelId) { bytes, _ ->
+            _previewImageBytes.value = bytes
+            _previewImageName.value = fileName
         }
     }
 

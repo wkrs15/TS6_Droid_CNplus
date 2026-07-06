@@ -12,17 +12,21 @@ import kotlinx.coroutines.flow.map
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 private val KEY_AUDIO_GAIN = floatPreferencesKey("audio_gain")
+private val KEY_INPUT_GAIN = floatPreferencesKey("input_gain")
 private val KEY_SHOW_LINK_THUMBNAILS = booleanPreferencesKey("show_link_thumbnails")
 private val KEY_AUTO_LOAD_IMAGES = booleanPreferencesKey("auto_load_images")
 private val KEY_LANGUAGE = stringPreferencesKey("language")
 private val KEY_ENABLE_FLOATING_WINDOW = booleanPreferencesKey("enable_floating_window")
-private val KEY_ANIME_BACKGROUND = booleanPreferencesKey("anime_background")
+
 private val KEY_NOISE_SUPPRESSION = booleanPreferencesKey("noise_suppression")
 
 class SettingsStore(private val context: Context) {
 
     val audioGain: Flow<Float> = context.settingsDataStore.data
         .map { it[KEY_AUDIO_GAIN] ?: 1.0f }
+
+    val inputGain: Flow<Float> = context.settingsDataStore.data
+        .map { it[KEY_INPUT_GAIN] ?: 1.0f }
 
     val showLinkThumbnails: Flow<Boolean> = context.settingsDataStore.data
         .map { it[KEY_SHOW_LINK_THUMBNAILS] ?: false }
@@ -36,11 +40,12 @@ class SettingsStore(private val context: Context) {
     val enableFloatingWindow: Flow<Boolean> = context.settingsDataStore.data
         .map { it[KEY_ENABLE_FLOATING_WINDOW] ?: true }
 
-    val animeBackground: Flow<Boolean> = context.settingsDataStore.data
-        .map { it[KEY_ANIME_BACKGROUND] ?: true }
-
     suspend fun setAudioGain(gain: Float) {
         context.settingsDataStore.edit { it[KEY_AUDIO_GAIN] = gain }
+    }
+
+    suspend fun setInputGain(gain: Float) {
+        context.settingsDataStore.edit { it[KEY_INPUT_GAIN] = gain }
     }
 
     suspend fun setShowLinkThumbnails(enabled: Boolean) {
@@ -57,10 +62,6 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setEnableFloatingWindow(enabled: Boolean) {
         context.settingsDataStore.edit { it[KEY_ENABLE_FLOATING_WINDOW] = enabled }
-    }
-
-    suspend fun setAnimeBackground(enabled: Boolean) {
-        context.settingsDataStore.edit { it[KEY_ANIME_BACKGROUND] = enabled }
     }
 
     val noiseSuppression: Flow<Boolean> = context.settingsDataStore.data

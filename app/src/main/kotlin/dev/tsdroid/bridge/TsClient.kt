@@ -110,7 +110,7 @@ class TsClient {
             try {
                 stopEventLoop()
                 val hadExistingClient = disconnectOnNativeThread()
-                
+
                 delay(if (hadExistingClient) RECONNECT_AFTER_DISCONNECT_DELAY_MS else INITIAL_CONNECT_SETTLE_MS)
                 
                 serverAddress = address
@@ -246,6 +246,11 @@ class TsClient {
                         if (events.isNotEmpty() || refreshCounter >= 25) {
                             refreshState()
                             refreshCounter = 0
+                            // Heartbeat: detect silent disconnection (WiFi off, etc.)
+                            if (_state.value == ConnectionState.CONNECTED && !c.isConnected) {
+                                Log.w(TAG, "Heartbeat: connection lost, forcing disconnect")
+                                _state.value = ConnectionState.DISCONNECTED
+                            }
                         }
                     } catch (e: Throwable) {
                         if (e is CancellationException) throw e
@@ -438,7 +443,9 @@ class TsClient {
 
     private fun launchNativeCommand(name: String, block: Client.() -> Unit) {
         clientCoroutineScope.launch {
+            // Use a local reference to guard against concurrent closeAfterNativeFailure()
             val c = client ?: return@launch
+            if (client !== c) return@launch // client was replaced between null check and usage
             try {
                 c.block()
             } catch (e: Throwable) {

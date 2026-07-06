@@ -17,8 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -78,9 +77,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.tsdroid.han.R
 import dev.tslib.ConnectionState
-import dev.tsdroid.ui.component.AnimeBackground
 import dev.tsdroid.ui.component.ChannelTree
 import dev.tsdroid.viewmodel.ConnectionViewModel
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,8 +112,6 @@ fun ConnectionScreen(
 
     val isConnecting = connectionState == ConnectionState.CONNECTING
     val context = LocalContext.current
-    val settingsStore = remember { dev.tsdroid.data.SettingsStore(context) }
-    val animeBackground by settingsStore.animeBackground.collectAsStateWithLifecycle(initialValue = true)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -142,8 +140,6 @@ fun ConnectionScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimeBackground(enabled = animeBackground)
-
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -202,21 +198,29 @@ fun ConnectionScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                stringResource(R.string.no_connection),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    stringResource(R.string.no_connection),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    stringResource(R.string.tap_add_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
                         }
                     } else {
-                        Column(
+                        LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 16.dp)
-                                .verticalScroll(rememberScrollState()),
+                                .padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 16.dp),
                         ) {
-                            bookmarks.forEachIndexed { index, bookmark ->
+                            itemsIndexed(bookmarks, key = { index, _ -> index }) { index, bookmark ->
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = CardDefaults.cardColors(
@@ -296,7 +300,6 @@ fun ConnectionScreen(
                                     }
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
                         }
                     }
 
@@ -343,7 +346,7 @@ fun ConnectionScreen(
             }
 
             if (showChannelPicker) {
-                Dialog(onDismissRequest = { viewModel.showChannelPicker.value = false }) {
+                Dialog(onDismissRequest = { viewModel.dismissChannelPicker() }) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         shape = MaterialTheme.shapes.large,
@@ -363,7 +366,7 @@ fun ConnectionScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             TextButton(
-                                onClick = { viewModel.showChannelPicker.value = false },
+                                onClick = { viewModel.dismissChannelPicker() },
                                 modifier = Modifier.align(Alignment.End),
                             ) {
                                 Text(stringResource(R.string.cancel))
@@ -403,7 +406,7 @@ fun ConnectionScreen(
 
                         OutlinedTextField(
                             value = address,
-                            onValueChange = { viewModel.address.value = it },
+                            onValueChange = { viewModel.updateAddress(it) },
                             label = { Text(stringResource(R.string.server_address)) },
                             placeholder = { Text(stringResource(R.string.server_address_placeholder)) },
                             modifier = Modifier.fillMaxWidth(),
@@ -415,7 +418,7 @@ fun ConnectionScreen(
 
                         OutlinedTextField(
                             value = nickname,
-                            onValueChange = { viewModel.nickname.value = it },
+                            onValueChange = { viewModel.updateNickname(it) },
                             label = { Text(stringResource(R.string.nickname)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
@@ -426,7 +429,7 @@ fun ConnectionScreen(
 
                         OutlinedTextField(
                             value = password,
-                            onValueChange = { viewModel.password.value = it },
+                            onValueChange = { viewModel.updatePassword(it) },
                             label = { Text(stringResource(R.string.password_optional)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
@@ -438,7 +441,7 @@ fun ConnectionScreen(
 
                         OutlinedTextField(
                             value = channel,
-                            onValueChange = { viewModel.channel.value = it },
+                            onValueChange = { viewModel.updateChannel(it) },
                             label = { Text(stringResource(R.string.channel_optional)) },
                             placeholder = { Text(stringResource(R.string.default_channel)) },
                             modifier = Modifier.fillMaxWidth(),

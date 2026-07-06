@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -102,6 +105,8 @@ fun FileManagerDialog(
     var renameTarget by remember { mutableStateOf<String?>(null) }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
     var shareTarget by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var isSelectMode by remember { mutableStateOf(false) }
+    val selectedFiles = remember { mutableSetOf<String>() }
 
     val context = LocalContext.current
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -156,21 +161,42 @@ fun FileManagerDialog(
                         }
                     },
                     actions = {
-                        if (canCreateDir) {
+                        if (isSelectMode) {
+                            // In selection mode: download selected
+                            val count = selectedFiles.size
+                            TextButton(
+                                onClick = {
+                                    selectedFiles.toList().forEach { onDownload(it) }
+                                    selectedFiles.clear()
+                                    isSelectMode = false
+                                },
+                                enabled = count > 0,
+                            ) {
+                                Text("下载($count)")
+                            }
+                        }
+                        if (canDownload && !isSelectMode) {
+                            IconButton(onClick = { isSelectMode = true }) {
+                                Icon(Icons.Default.Download, contentDescription = "多选下载")
+                            }
+                        }
+                        if (canCreateDir && !isSelectMode) {
                             IconButton(onClick = { showNewFolderDialog = true }) {
                                 Icon(Icons.Default.CreateNewFolder, contentDescription = stringResource(R.string.new_folder))
                             }
                         }
-                        IconButton(onClick = onRefresh) {
-                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
+                        IconButton(onClick = { if (isSelectMode) { selectedFiles.clear(); isSelectMode = false } else onRefresh() }) {
+                            Icon(if (isSelectMode) Icons.Default.Close else Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                         }
-                        if (canUpload) {
+                        if (canUpload && !isSelectMode) {
                             IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
                                 Icon(Icons.Default.Upload, contentDescription = stringResource(R.string.upload))
                             }
                         }
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
+                        if (!isSelectMode) {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
+                            }
                         }
                     },
                 )
@@ -200,6 +226,8 @@ fun FileManagerDialog(
                                 items(sortedFiles, key = { it.name }) { entry ->
                                     FileEntryRow(
                                         entry = entry,
+                                        isSelected = entry.name in selectedFiles,
+                                        isSelectMode = isSelectMode,
                                         canDownload = canDownload,
                                         canRename = canRename,
                                         canDelete = canDelete,
@@ -209,6 +237,10 @@ fun FileManagerDialog(
                                         onShare = { shareTarget = entry.name to entry.size },
                                         onRename = { renameTarget = entry.name },
                                         onDelete = { deleteTarget = entry.name },
+                                        onToggleSelect = {
+                                            if (it in selectedFiles) selectedFiles.remove(it)
+                                            else selectedFiles.add(it)
+                                        },
                                     )
                                 }
                             }
@@ -357,6 +389,8 @@ private fun ShareTargetDialog(
 @Composable
 private fun FileEntryRow(
     entry: TsFileEntry,
+    isSelected: Boolean = false,
+    isSelectMode: Boolean = false,
     canDownload: Boolean = true,
     canRename: Boolean = true,
     canDelete: Boolean = true,
@@ -366,6 +400,7 @@ private fun FileEntryRow(
     onShare: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onToggleSelect: (String) -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -373,13 +408,25 @@ private fun FileEntryRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                if (!entry.isFile) onFolderClick()
+                if (isSelectMode) {
+                    onToggleSelect(entry.name)
+                } else if (!entry.isFile) onFolderClick()
                 else if (isImageFile(entry.name)) onPreviewImage()
                 else if (canDownload) onDownload()
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Checkbox in select mode
+        if (isSelectMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onToggleSelect(entry.name) },
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+
         // Icon
         val icon = when {
             !entry.isFile -> Icons.Default.Folder
