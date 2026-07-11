@@ -1,6 +1,7 @@
 package dev.tsdroid.data
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -9,12 +10,15 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "bookmarks")
 
 class BookmarkStore(private val context: Context) {
 
     companion object {
+        private const val TAG = "BookmarkStore"
         private val KEY_BOOKMARKS = stringPreferencesKey("bookmarks_json")
         private val KEY_AUTO_RECONNECT = booleanPreferencesKey("auto_reconnect")
         private val KEY_LAST_BOOKMARK_ADDRESS = stringPreferencesKey("last_bookmark_address")
@@ -95,6 +99,29 @@ class BookmarkStore(private val context: Context) {
     }
 
     private fun parseBookmarks(json: String): List<ServerBookmark> {
+        if (json.isBlank() || json == "[]") return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                ServerBookmark(
+                    name = obj.optString("name", ""),
+                    address = obj.optString("address", ""),
+                    nickname = obj.optString("nickname", ""),
+                    password = obj.optString("password", null)?.takeIf { it != "null" },
+                    channel = obj.optString("channel", null)?.takeIf { it != "null" },
+                    serverName = obj.optString("serverName", null)?.takeIf { it != "null" },
+                    iconId = obj.optLong("iconId", 0L),
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse bookmarks JSON, falling back to legacy parser", e)
+            parseBookmarksLegacy(json)
+        }
+    }
+
+    /** Legacy parser for data written before org.json migration. */
+    private fun parseBookmarksLegacy(json: String): List<ServerBookmark> {
         if (json == "[]") return emptyList()
         return try {
             val entries = json.removeSurrounding("[", "]").split("},{")
@@ -121,10 +148,18 @@ class BookmarkStore(private val context: Context) {
     }
 
     private fun serializeBookmarks(bookmarks: List<ServerBookmark>): String {
-        return bookmarks.joinToString(",", "[", "]") { b ->
-            """{"name":"${escape(b.name)}","address":"${escape(b.address)}","nickname":"${escape(b.nickname)}","password":"${b.password ?: "null"}","channel":"${b.channel ?: "null"}","serverName":"${b.serverName ?: "null"}","iconId":"${b.iconId}"}"""
+        val arr = JSONArray()
+        for (b in bookmarks) {
+            arr.put(JSONObject().apply {
+                put("name", b.name)
+                put("address", b.address)
+                put("nickname", b.nickname)
+                put("password", b.password ?: JSONObject.NULL)
+                put("channel", b.channel ?: JSONObject.NULL)
+                put("serverName", b.serverName ?: JSONObject.NULL)
+                put("iconId", b.iconId)
+            })
         }
+        return arr.toString()
     }
-
-    private fun escape(s: String): String = s.replace("\"", "\\\"")
 }

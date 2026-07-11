@@ -8,6 +8,50 @@
 
 ## 更新日志
 
+### v2.2.1-Han（2026-07-12）— 全面修复与体验重构
+
+**Bug 修复**
+- 🔇 **VA 模式按钮不再永远显示「静音中」**：根据真实麦克风状态切换图标和颜色（开麦 Mic+绿、静音 MicOff+红）
+- 🗣️ **悬浮窗说话状态改由 ID 匹配**：用户列表不再靠昵称文字匹配说话状态，改用 userId
+- 📏 **底部栏间距修复**：消除手势导航设备上底部栏重复的 `navigationBarsPadding`
+- 🔑 **聊天列表 key 稳定化**：消息 key 从 `hashCode` 改为 `timestamp+senderId+sender`，消除 duplicate key 警告
+- 🆔 **频道消息补全 senderId**：频道消息的 `ChatMessage` 现在正确设置 senderId
+- ⚡ **`disconnect()` 不再阻塞 UI 线程**：`runBlocking` 替换为 `disconnectScope.launch`，连接中按断开不再导致 ANR
+- 🧵 **`audioRecord` 添加 `@Volatile`**：消除 IO 线程读到 stale null 导致的偶现捕获失败
+- 💣 **`downloadCache` 使用 `ConcurrentHashMap`**：消除多线程并发 `mutableMapOf` 导致的 `ConcurrentModificationException`
+- 🔊 **修复混音残余数据**：`bytesToShorts` 零填充剩余解码缓冲区，不再混入旧帧噪音
+- 🔇 **移除 AudioBridge 重复 release 调用**：清理 `startCapture` 和 `release()` 中各 2 处重复的 audio effect release
+- 🚫 **`commandErrors` 不再重放**：`replay = 1 → 0`，新连接不再弹旧连接的错误 Toast
+- 📋 **文件选择器 cursor 泄漏修复**：两处均改用 `ContentResolver.query().use {}`，异常时自动关闭
+- 🪟 **浮窗权限循环修复**：`onStop` 同一生命周期只弹一次权限申请，防止死循环
+- 🔧 **浮窗开关统一 DataStore**：`MainActivity` 改用 `SettingsStore` 读取，与设置页保持一致
+- 🗑️ **`BookmarkStore` 手写 JSON 重写**：改用 `org.json.JSONArray/JSONObject`，支持特殊字符不再乱码
+- 🎙️ **VA 模式快速切换不再锁死**：快速切 PTT↔VA 导致捕获挂掉后自动重启，无需重进服务器
+- 📱 **主界面与悬浮窗静音状态同步**：`isMicMuted` 改为直接引用 `audioBridge.isMuted`，两边共用同一个 StateFlow，不再有缓存不一致
+
+**界面改动**
+- 🔘 **PTT/VA 切换改为两段式开关**：底部栏显示 `[ PTT | VA ]` 分段按钮，选中高亮，点击切换，语义一目了然
+- VA 模式下按钮文字显示「已开麦」/「静音」，不再显示「PTT」
+
+**功能优化**
+- **VA 模式逻辑彻底简化**：切到 VA 自动开麦、切到 PTT 自动静音，去掉了 `savedVaMuteState`，没有中间态
+- **连接时正确同步麦克风状态**：`bindToService` 直接读 DataStore 判断 PTT/VA，VA 模式连接后自动 `setMuted(false)`，其他客户端不再看不到麦克风指示
+- **麦克风异常时自动恢复**：`toggleMicMute` 和 `toggleVoiceMode` 检测到捕获停止时自动调用 `startCapture` 重启
+- **通知栏实时更新**：users / channels / serverInfo 变化时同步刷新
+- **PTT 模式持久化**：PTT/VA 模式保存到 DataStore，进程重启不丢失
+- **👂 音频路由改为通话音道**：`USAGE_GAME → USAGE_VOICE_COMMUNICATION`，音量键单独控制通话音量
+- **头像定时刷新并发防护**：添加 `isAvatarRefreshing` 防止重叠下载
+- **通知国际化**：「人在线」改为 `R.string.notif_online_suffix`，支持三语言
+- **连接页权限 Toast**：拒绝麦克风权限时提示而非静默跳过
+- **文件超限 Toast 国际化**：改用 `R.string.file_too_large`
+
+**代码重构**
+- **`BookmarkStore` 替换手写 JSON**：使用 `org.json` 原生序列化，保留旧格式兼容回退
+- **`_connectionState` 初始化为 `DISCONNECTED`**：避免 5s 绑定期内误显「已连接」
+- **移除 `isLocalVoiceActive` 无用 getter**：该 getter 每次访问创建新 `MutableStateFlow(false)`，已删除
+
+---
+
 ### v2.2.0-Han（2026-07-05）— 代码优化与用户体验改进
 
 **新功能**

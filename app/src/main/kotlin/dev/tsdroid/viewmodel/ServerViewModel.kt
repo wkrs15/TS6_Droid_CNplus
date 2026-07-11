@@ -42,11 +42,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class DownloadState {
     data object Idle : DownloadState()
@@ -69,7 +71,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private var serverAddress: String? = null
     private var saveJob: Job? = null
     // In-memory cache: avoids re-reading from disk + re-decoding for the same image
-    private val downloadCache = mutableMapOf<String, StateFlow<DownloadState>>()
+    private val downloadCache = ConcurrentHashMap<String, StateFlow<DownloadState>>()
 
     private val _previewImageBytes = MutableStateFlow<ByteArray?>(null)
     val previewImageBytes: StateFlow<ByteArray?> = _previewImageBytes.asStateFlow()
@@ -116,16 +118,18 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val _privateMessages = MutableStateFlow<Map<Int, List<ChatMessage>>>(emptyMap())
     val privateMessages: StateFlow<Map<Int, List<ChatMessage>>> = _privateMessages.asStateFlow()
 
-    // Separate PTT mode from actual mute state
+    // Separate PTT mode from actual mute state — persisted in settings
     private val _isPttMode = MutableStateFlow(true) // true = PTT, false = voice activity
     val isPttMode: StateFlow<Boolean> = _isPttMode.asStateFlow()
+
+    private val _isMicMuted = MutableStateFlow(true)
+    val isMicMuted: StateFlow<Boolean>
+        get() = audioBridge?.isMuted ?: _isMicMuted
 
     private val _isOutputMuted = MutableStateFlow(false)
     val isOutputMuted: StateFlow<Boolean> = _isOutputMuted.asStateFlow()
 
-    val isLocalVoiceActive: StateFlow<Boolean> get() = audioBridge?.isLocalVoiceActive ?: MutableStateFlow(false)
-
-    private val _connectionState = MutableStateFlow(ConnectionState.CONNECTED)
+    private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<Int> = _connectionState.asStateFlow()
 
     // Unread message counters
@@ -182,6 +186,12 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private var bound = false
 
     init {
+        // Load persisted PTT mode
+        viewModelScope.launch {
+            settingsStore.isPttMode.collect { mode ->
+                _isPttMode.value = mode
+            }
+        }
         // Combine raw users + talking set to produce patched user list
         viewModelScope.launch {
             combine(_rawUsers, _talkingUserIds, _isLocalTalking) { users, talking, localTalking ->
@@ -345,6 +355,12 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 service.audioBridge.isOutputMuted.collect { _isOutputMuted.value = it }
             }
 
+            // 如果当前是 VA 模式，启动时取消静音，让服务器知道麦克风状态
+            // 直接读 DataStore 而非 _isPttMode.value（init 协程可能还没收集到）
+            if (!settingsStore.isPttMode.first()) {
+                service.audioBridge.setMuted(false)
+            }
+
             // Start event loop (guarded by AtomicBoolean — safe if already running)
             service.tsClient.startEventLoop()
             
@@ -503,8 +519,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                                 "channel" -> {
                                     // Safely create and add channel message
                                     val msg = ChatMessage(
-                                        sender = sender, 
-                                        text = displayText, 
+                                        sender = sender,
+                                        text = displayText,
+                                        senderId = senderId ?: 0,
                                         fileAttachment = attachment
                                     )
                                     
@@ -649,13 +666,37 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleVoiceMode() {
         val newPttMode = !_isPttMode.value
         _isPttMode.value = newPttMode
-        // When switching to PTT mode, mute. When switching to VA, unmute.
-        audioBridge?.setMuted(newPttMode)
+        if (newPttMode) {
+            // PTT mode: start muted, hold to talk
+            audioBridge?.setMuted(true)
+        } else {
+            // VA mode: open mic by default
+            audioBridge?.setMuted(false)
+            // 如果捕获循环挂了，趁机重启
+            val bridge = audioBridge
+            if (bridge != null && !bridge.isCapturing.value) {
+                bridge.startCapture(viewModelScope, noiseSuppression.value)
+            }
+        }
+        viewModelScope.launch { settingsStore.setPttMode(newPttMode) }
     }
 
     /** Toggle mic mute without changing PTT/VA mode (used in VA mode's mute button). */
     fun toggleMicMute() {
-        audioBridge?.let { it.setMuted(!it.isMuted.value) }
+        val bridge = audioBridge ?: return
+        if (bridge.isMuted.value && !bridge.isCapturing.value) {
+            // 麦克风被静音且捕获已停止，尝试重启
+            bridge.startCapture(viewModelScope, noiseSuppression.value)
+            if (!bridge.isCapturing.value) {
+                Toast.makeText(
+                    getApplication(),
+                    getApplication<Application>().getString(R.string.mic_not_available),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return
+            }
+        }
+        bridge.setMuted(!bridge.isMuted.value)
     }
 
     fun toggleOutputMute() {

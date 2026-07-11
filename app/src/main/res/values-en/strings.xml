@@ -43,6 +43,7 @@
     <string name="push_to_talk">Push to talk</string>
     <string name="mute_mic">Mute mic</string>
     <string name="unmute_mic">Unmute mic</string>
+    <string name="mic_on">Mic On</string>
     <string name="tab_channel">Channel</string>
     <string name="tab_private">PM</string>
     <string name="tab_home">Home</string>
@@ -84,6 +85,7 @@
 
     <!-- Notification -->
     <string name="notif_unmute">Unmute</string>
+    <string name="notif_mute">Mute</string>
 
     <!-- ViewModel -->
     <string name="unknown_sender">Unknown</string>
@@ -91,6 +93,18 @@
     <string name="error_address_nickname_required">Address and nickname are required</string>
     <string name="connection_failed">Connection failed</string>
     <string name="browse_failed">Failed to browse channels</string>
+
+    <!-- Audio -->
+    <string name="mic_not_available">Microphone not available. Please check permissions</string>
+
+    <!-- Notification -->
+    <string name="notif_online_suffix"> online</string>
+
+    <!-- File -->
+    <string name="file_too_large">File exceeds 10MB limit</string>
+
+    <!-- Permission -->
+    <string name="permission_mic_denied">Microphone permission denied. Voice features unavailable</string>
 
     <!-- AboutScreen -->
     <string name="about_software">About / 关于软件</string>

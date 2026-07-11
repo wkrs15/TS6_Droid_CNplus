@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
     private val connectionViewModel: ConnectionViewModel by viewModels()
     private val TAG = "MainActivity"
 
+    // 标记本轮生命周期中是否已经弹过浮窗权限请求，避免 onStop 死循环
+    private var overlayPermissionRequestedThisSession = false
+
     override fun attachBaseContext(newBase: Context) {
         val languageTag = resolveLanguageTag(newBase)
         val locale = Locale.forLanguageTag(languageTag)
@@ -43,11 +46,12 @@ class MainActivity : ComponentActivity() {
         super.attachBaseContext(updatedContext)
     }
 
-    /** Load language setting synchronously with a timeout to avoid ANR. */
+    /** Load language setting synchronously with a short timeout.
+     *  Must block here because attachBaseContext needs locale before super call. */
     private fun resolveLanguageTag(context: Context): String {
         return try {
             runBlocking {
-                withTimeoutOrNull(500L) {
+                withTimeoutOrNull(100L) {
                     SettingsStore(context).language.first()
                 } ?: "zh"
             }
@@ -76,6 +80,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // 每次回到前台时重置权限请求标记，允许再次申请
+        overlayPermissionRequestedThisSession = false
     }
 
     override fun onStop() {
@@ -86,15 +92,18 @@ class MainActivity : ComponentActivity() {
     /** Handle floating window logic in onStop without blocking the main thread. */
     private fun onStopHandleFloatingWindow() {
         if (isChangingConfigurations) return
-        val prefs = getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
-        val enableFloatingWindow = prefs.getBoolean("enable_floating_window", false)
-        if (!enableFloatingWindow) {
-            Log.d(TAG, "Floating window is disabled in settings")
-            return
-        }
+        // 如果本轮生命周期已经弹过权限请求，不再重复弹（防止死循环）
+        if (overlayPermissionRequestedThisSession) return
         lifecycleScope.launch {
+            // 用 DataStore 读取悬浮窗开关（与 SettingsStore 一致）
+            val enableFloatingWindow = SettingsStore(this@MainActivity).enableFloatingWindow.first()
+            if (!enableFloatingWindow) {
+                Log.d(TAG, "Floating window is disabled in settings")
+                return@launch
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this@MainActivity)) {
                 Log.w(TAG, "Overlay permission not granted, prompting user")
+                overlayPermissionRequestedThisSession = true
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName"))
                 startActivity(intent)
             } else {

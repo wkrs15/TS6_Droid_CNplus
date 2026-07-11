@@ -25,8 +25,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -82,7 +82,7 @@ class TsClient {
     private val _serverInfo = MutableStateFlow<ServerInfo?>(null)
     val serverInfo: StateFlow<ServerInfo?> = _serverInfo.asStateFlow()
 
-    private val _commandErrors = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 16)
+    private val _commandErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 16)
     val commandErrors: SharedFlow<String> = _commandErrors.asSharedFlow()
 
     private val downloadCallbacks = ConcurrentHashMap<String, CompletableDeferred<ByteArray>>()
@@ -91,6 +91,7 @@ class TsClient {
 
     private var eventLoopJob: Job? = null
     private val clientCoroutineScope = CoroutineScope(nativeDispatcher + SupervisorJob())
+    private val disconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectMutex = Mutex()
 
     val isConnected: Boolean
@@ -617,12 +618,14 @@ class TsClient {
         }.also { uploadCallbacks.remove(path) } ?: false
     }
 
-    fun disconnect() {
-        if (Thread.currentThread() == nativeThread) {
-            disconnectOnNativeThread()
-        } else {
-            runBlocking(nativeDispatcher) {
+    fun disconnect(): Job {
+        return disconnectScope.launch {
+            if (Thread.currentThread() == nativeThread) {
                 disconnectOnNativeThread()
+            } else {
+                withContext(nativeDispatcher) {
+                    disconnectOnNativeThread()
+                }
             }
         }
     }

@@ -90,6 +90,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -121,6 +122,7 @@ fun ServerScreen(
     val channelMessages by viewModel.channelMessages.collectAsStateWithLifecycle()
     val privateMessages by viewModel.privateMessages.collectAsStateWithLifecycle()
     val isPttMode by viewModel.isPttMode.collectAsStateWithLifecycle()
+    val isMicMuted by viewModel.isMicMuted.collectAsStateWithLifecycle()
     val isOutputMuted by viewModel.isOutputMuted.collectAsStateWithLifecycle()
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val unreadChannel by viewModel.unreadChannel.collectAsStateWithLifecycle()
@@ -230,12 +232,7 @@ fun ServerScreen(
             )
         },
         bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -309,39 +306,85 @@ fun ServerScreen(
                             }
                         }
                     } else {
-                        // Voice activity mode: click to toggle mic mute (does NOT switch mode)
+                        // Voice activity mode: reflect actual mute state
+                        val vaBackground = if (isMicMuted) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.primaryContainer
+                        val vaTint = if (isMicMuted) MaterialTheme.colorScheme.onErrorContainer
+                            else MaterialTheme.colorScheme.onPrimaryContainer
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .background(vaBackground)
                                 .clickable { viewModel.toggleMicMute() },
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    Icons.Default.MicOff,
-                                    contentDescription = stringResource(R.string.mute_mic),
+                                    if (isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = stringResource(if (isMicMuted) R.string.unmute_mic else R.string.mute_mic),
                                     modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    tint = vaTint,
                                 )
                                 Text(
-                                    stringResource(R.string.mute),
+                                    stringResource(if (isMicMuted) R.string.mute else R.string.mic_on),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    color = vaTint,
                                 )
                             }
                         }
                     }
 
-                    // Toggle voice mode (PTT 鈫?Voice Activity)
-                    IconButton(onClick = { viewModel.toggleVoiceMode() }) {
-                        Icon(
-                            if (isPttMode) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = stringResource(if (isPttMode) R.string.unmute_mic else R.string.mute_mic),
-                            tint = if (isPttMode) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.primary,
-                        )
+                    // Voice mode switch: PTT (left) ↔ Voice Activation (right)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { viewModel.toggleVoiceMode() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // PTT segment
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (isPttMode) MaterialTheme.colorScheme.primaryContainer
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "PTT",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isPttMode) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isPttMode) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
+                            // VA segment
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (!isPttMode) MaterialTheme.colorScheme.primaryContainer
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "VA",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (!isPttMode) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (!isPttMode) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
                     }
 
 
@@ -556,14 +599,16 @@ fun ChatPanel(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            val nameIndex = cursor?.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME) ?: -1
-            cursor?.moveToFirst()
-            val fileName = if (nameIndex >= 0) cursor?.getString(nameIndex) ?: "file" else "file"
-            cursor?.close()
+            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) {
+                    cursor.moveToFirst()
+                    cursor.getString(nameIndex) ?: "file"
+                } else "file"
+            } ?: "file"
             val data = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@rememberLauncherForActivityResult
             if (data.size > 10_485_760) { // 10MB max
-                android.widget.Toast.makeText(context, "文件超过 10MB 限制", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, context.getString(R.string.file_too_large), android.widget.Toast.LENGTH_SHORT).show()
                 return@rememberLauncherForActivityResult
             }
             onUploadFile(fileName, data)

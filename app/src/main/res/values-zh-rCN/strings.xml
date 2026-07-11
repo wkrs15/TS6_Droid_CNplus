@@ -58,6 +58,7 @@
     <string name="ptt">按键说话</string>
     <string name="mute_mic">静音麦克风</string>
     <string name="mute">静音</string>
+    <string name="mic_on">已开麦</string>
     <string name="unmute_mic">取消静音</string>
     <string name="tab_channel">频道</string>
     <string name="tab_private">私信</string>
@@ -125,6 +126,16 @@
     <!-- Notification -->
     <string name="notif_unmute">取消静音</string>
     <string name="notif_mute">静音</string>
+    <string name="notif_online_suffix">人在线</string>
+
+    <!-- Audio -->
+    <string name="mic_not_available">麦克风不可用，请检查权限设置</string>
+
+    <!-- File -->
+    <string name="file_too_large">文件超过 10MB 限制</string>
+
+    <!-- Permission -->
+    <string name="permission_mic_denied">麦克风权限被拒绝，语音功能无法使用</string>
 
     <!-- ViewModel -->
     <string name="unknown_sender">未知</string>

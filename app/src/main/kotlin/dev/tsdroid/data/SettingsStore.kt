@@ -19,6 +19,7 @@ private val KEY_LANGUAGE = stringPreferencesKey("language")
 private val KEY_ENABLE_FLOATING_WINDOW = booleanPreferencesKey("enable_floating_window")
 
 private val KEY_NOISE_SUPPRESSION = booleanPreferencesKey("noise_suppression")
+private val KEY_PTT_MODE = booleanPreferencesKey("ptt_mode")
 
 class SettingsStore(private val context: Context) {
 
@@ -67,7 +68,14 @@ class SettingsStore(private val context: Context) {
     val noiseSuppression: Flow<Boolean> = context.settingsDataStore.data
         .map { it[KEY_NOISE_SUPPRESSION] ?: true }
 
+    val isPttMode: Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_PTT_MODE] ?: true }
+
     suspend fun setNoiseSuppression(enabled: Boolean) {
         context.settingsDataStore.edit { it[KEY_NOISE_SUPPRESSION] = enabled }
+    }
+
+    suspend fun setPttMode(enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_PTT_MODE] = enabled }
     }
 }

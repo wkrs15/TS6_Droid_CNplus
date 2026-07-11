@@ -59,6 +59,7 @@
     <string name="ptt">PTT</string>
     <string name="mute_mic">Couper le micro</string>
     <string name="mute">Mute</string>
+    <string name="mic_on">Mic On</string>
     <string name="unmute_mic">Activer le micro</string>
     <string name="tab_channel">Channel</string>
     <string name="tab_private">MP</string>
@@ -126,6 +127,16 @@
     <!-- Notification -->
     <string name="notif_unmute">Réactiver</string>
     <string name="notif_mute">Mute</string>
+    <string name="notif_online_suffix"> en ligne</string>
+
+    <!-- Audio -->
+    <string name="mic_not_available">Microphone indisponible. Vérifiez les autorisations</string>
+
+    <!-- File -->
+    <string name="file_too_large">Fichier dépasse la limite de 10 Mo</string>
+
+    <!-- Permission -->
+    <string name="permission_mic_denied">Permission micro refusée. Fonctions vocales indisponibles</string>
 
     <!-- ViewModel -->
     <string name="unknown_sender">Inconnu</string>

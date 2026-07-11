@@ -115,7 +115,17 @@ fun ConnectionScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { granted ->
+        if (granted.containsValue(false)) {
+            if (granted.containsKey(Manifest.permission.RECORD_AUDIO) && granted[Manifest.permission.RECORD_AUDIO] == false) {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(dev.tsdroid.han.R.string.permission_mic_denied),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)

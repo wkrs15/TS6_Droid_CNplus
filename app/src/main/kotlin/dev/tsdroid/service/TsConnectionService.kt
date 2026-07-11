@@ -139,6 +139,7 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
     private var latestStartId = 0
     @Volatile private var isStopping = false
     @Volatile private var restartRequestedWhileStopping = false
+    @Volatile private var isAvatarRefreshing = false
 
     override fun onCreate() {
         super.onCreate()
@@ -232,10 +233,17 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         tsClient.users.onEach {
             updateOverlayChannelName()
             refreshActiveSpeakerName()
+            updateNotification()
         }.launchIn(serviceScope)
 
         tsClient.channels.onEach {
             updateOverlayChannelName()
+            updateNotification()
+        }.launchIn(serviceScope)
+
+        // Listen for server info changes to update notification title
+        tsClient.serverInfo.onEach {
+            updateNotification()
         }.launchIn(serviceScope)
         
         // Listen to local voice activity and apply delay mechanism
@@ -278,39 +286,46 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         serviceScope.launch {
             while (true) {
                 delay(AVATAR_REFRESH_INTERVAL_MS)
+                // Skip if already refreshing (previous cycle still running)
+                if (isAvatarRefreshing) continue
                 val myId = tsClient.clientId
                 if (myId == null) continue
-                
+
                 val currentUsers = tsClient.users.value
                 val currentChannelId = currentUsers.find { it.id == myId }?.channelId
                 val channelUsers = currentUsers.filter { it.channelId == currentChannelId }
-                
+
                 // Collect all UIDs in the current channel
                 val uids = channelUsers.mapNotNull { it.uid }.filter { it.isNotEmpty() }.toList()
                 if (uids.isEmpty()) continue
-                
+
+                isAvatarRefreshing = true
                 serviceScope.launch(Dispatchers.IO) {
-                    // Clear memory cache for all channel users to force re-download
-                    avatarCache.clearMemoryCache(*uids.toTypedArray())
-                    
-                    // Re-download all avatars
-                    for (uid in uids) {
-                        avatarCache.loadAvatar(uid, tsClient)
-                    }
-                    
-                    // Update the current speaker avatar if someone is speaking
-                    val currentSpeakerId = overlayActiveSpeakerId
-                    if (currentSpeakerId != null) {
-                        val speakerUser = currentUsers.find { it.id == currentSpeakerId }
-                        val speakerUid = speakerUser?.uid
-                        if (!speakerUid.isNullOrEmpty()) {
-                            val updatedAvatar = avatarCache.getAvatar(speakerUid)
-                            withContext(Dispatchers.Main) {
-                                if (overlayActiveSpeakerId == currentSpeakerId) {
-                                    overlayActiveSpeakerAvatar = updatedAvatar
+                    try {
+                        // Clear memory cache for all channel users to force re-download
+                        avatarCache.clearMemoryCache(*uids.toTypedArray())
+
+                        // Re-download all avatars
+                        for (uid in uids) {
+                            avatarCache.loadAvatar(uid, tsClient)
+                        }
+
+                        // Update the current speaker avatar if someone is speaking
+                        val currentSpeakerId = overlayActiveSpeakerId
+                        if (currentSpeakerId != null) {
+                            val speakerUser = currentUsers.find { it.id == currentSpeakerId }
+                            val speakerUid = speakerUser?.uid
+                            if (!speakerUid.isNullOrEmpty()) {
+                                val updatedAvatar = avatarCache.getAvatar(speakerUid)
+                                withContext(Dispatchers.Main) {
+                                    if (overlayActiveSpeakerId == currentSpeakerId) {
+                                        overlayActiveSpeakerAvatar = updatedAvatar
+                                    }
                                 }
                             }
                         }
+                    } finally {
+                        isAvatarRefreshing = false
                     }
                 }
             }
@@ -414,15 +429,14 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
             tsClient.channels.value?.find { it.id == channelId }?.name
         } else null
         val channelInfo = if (currentChannel != null) "〈$currentChannel〉" else getString(R.string.connecting)
-        val bodyText = "$channelInfo | $userCount ${if (userCount > 1) "人在线" else "人在线"}"
+        val bodyText = "$channelInfo | $userCount${getString(R.string.notif_online_suffix)}"
 
         return NotificationCompat.Builder(this, TsDroidApp.CHANNEL_ID_CONNECTION)
             .setContentTitle(serverName)
             .setContentText(bodyText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(bodyText))
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(contentIntent)
-            .setOngoing(true)
             .setOngoing(true)
             .addAction(0, muteLabel, muteIntent)
             .addAction(0, getString(R.string.disconnect), disconnectIntent)
@@ -473,7 +487,7 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
         isIntentionalDisconnect = true
         serviceScope.launch(Dispatchers.IO) {
             try {
-                tsClient.disconnect()
+                tsClient.disconnect().join()
             } finally {
                 withContext(Dispatchers.Main) {
                     finishStopOrRestart(stopStartId)
@@ -915,7 +929,11 @@ class TsConnectionService : LifecycleService(), ViewModelStoreOwner, SavedStateR
                                 .padding(vertical = 8.dp)
                         ) {
                             items(activeUsers) { user ->
-                                val isSpeaking = if (user.id == myId) (isLocalVoiceActive || overlayActiveSpeakerId == myId) else user.nickname == activeSpeakerName
+                                val isSpeaking = if (user.id == myId) {
+                                    isLocalVoiceActive || overlayActiveSpeakerId == myId
+                                } else {
+                                    overlayActiveSpeakerId == user.id
+                                }
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()

@@ -119,7 +119,7 @@ fun ChatView(
     ) {
         items(displayItems, key = { item ->
             when (item) {
-                is ChatListItem.Message -> "msg_${item.msg.timestamp}_${item.msg.hashCode()}"
+                is ChatListItem.Message -> "msg_${item.msg.timestamp}_${item.msg.senderId}_${item.msg.sender}"
                 is ChatListItem.DateSeparator -> "sep_${item.label}"
             }
         }) { item ->

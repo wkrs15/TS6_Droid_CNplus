@@ -114,14 +114,19 @@ fun FileManagerDialog(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            val nameIndex = cursor?.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME) ?: -1
-            cursor?.moveToFirst()
-            val fileName = if (nameIndex >= 0) cursor?.getString(nameIndex) ?: "file" else "file"
-            cursor?.close()
+            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) {
+                    cursor.moveToFirst()
+                    cursor.getString(nameIndex) ?: "file"
+                } else "file"
+            } ?: "file"
             val data = context.contentResolver.openInputStream(uri)?.readBytes()
                 ?: return@rememberLauncherForActivityResult
-            if (data.size > 10_485_760) return@rememberLauncherForActivityResult
+            if (data.size > 10_485_760) {
+                android.widget.Toast.makeText(context, context.getString(dev.tsdroid.han.R.string.file_too_large), android.widget.Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
             onUploadFile(fileName, data)
         } catch (_: Exception) {}
     }

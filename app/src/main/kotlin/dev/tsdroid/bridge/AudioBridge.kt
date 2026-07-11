@@ -54,7 +54,7 @@ class AudioBridge(
     private val userDecoders = ConcurrentHashMap<Int, OpusCodec>()
     private val userQueues = ConcurrentHashMap<Int, ArrayDeque<ByteArray>>()
 
-    private var audioRecord: AudioRecord? = null
+    @Volatile private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private var automaticGainControl: AutomaticGainControl? = null
@@ -245,10 +245,6 @@ class AudioBridge(
             audioRecord = null
             noiseSuppressor?.release()
             noiseSuppressor = null
-        automaticGainControl?.release()
-        automaticGainControl = null
-        acousticEchoCanceler?.release()
-        acousticEchoCanceler = null
             automaticGainControl?.release()
             automaticGainControl = null
             acousticEchoCanceler?.release()
@@ -288,7 +284,7 @@ class AudioBridge(
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -415,10 +411,6 @@ class AudioBridge(
         automaticGainControl = null
         acousticEchoCanceler?.release()
         acousticEchoCanceler = null
-        automaticGainControl?.release()
-        automaticGainControl = null
-        acousticEchoCanceler?.release()
-        acousticEchoCanceler = null
         encoder?.close()
         encoder = null
         // Close per-user decoders
@@ -443,6 +435,10 @@ class AudioBridge(
         for (i in 0 until count) {
             out[i] = ((bytes[i * 2].toInt() and 0xFF) or
                     (bytes[i * 2 + 1].toInt() shl 8)).toShort()
+        }
+        // Zero-fill remaining buffer to avoid mixing stale data
+        for (i in count until out.size) {
+            out[i] = 0
         }
     }
 }
