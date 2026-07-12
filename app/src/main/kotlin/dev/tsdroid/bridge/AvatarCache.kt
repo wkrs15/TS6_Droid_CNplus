@@ -3,7 +3,6 @@ package dev.tsdroid.bridge
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
-import java.net.URLEncoder
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
@@ -33,6 +32,11 @@ class AvatarCache(private val cacheDir: File) {
             failedAttempts.remove(uid)
         }
         Log.d(TAG, "Cleared memory cache for ${uids.size} UID(s)")
+    }
+
+    /** Clear memory + disk cache for a specific UID, forcing a fresh download */
+    fun clearAllCache(uid: String) {
+        clearMemoryCache(uid)
     }
 
     /** Clear ALL memory caches so next loadAvatar calls re-download */
@@ -67,36 +71,10 @@ class AvatarCache(private val cacheDir: File) {
         if (loading.putIfAbsent(uid, true) != null) return
 
         try {
-            // UID contains / and = which are invalid in filenames — URL-encode for disk cache
-            val safeFileName = URLEncoder.encode(uid, "UTF-8")
-            val diskFile = File(avatarsDir, safeFileName)
-            var bytes: ByteArray? = null
-            var fromDisk = false
-
-            // Try disk cache first
-            if (diskFile.exists() && diskFile.length() > 0) {
-                bytes = diskFile.readBytes()
-                fromDisk = true
-                Log.d(TAG, "Read avatar from disk for $uid (${bytes.size} bytes)")
-            }
-
-            // Try decoding if we have disk data
-            if (fromDisk && bytes != null) {
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                if (bitmap != null) {
-                    memoryCache[uid] = bitmap.asImageBitmap()
-                    Log.d(TAG, "Loaded avatar from disk cache for $uid")
-                    return
-                }
-                Log.w(TAG, "Corrupt avatar on disk for $uid, deleting and re-downloading")
-                diskFile.delete()
-                bytes = null
-            }
-
-            // Download from server using UID-based path
+            // 直接从服务器下载，跳过磁盘缓存
             val path = uidToAvatarPath(uid)
             Log.d(TAG, "Downloading avatar for $uid at path $path")
-            bytes = tsClient.downloadFile(0L, path)
+            val bytes = tsClient.downloadFile(0L, path)
 
             if (bytes == null || bytes.isEmpty()) {
                 Log.w(TAG, "Download returned empty/null for $uid (attempt ${(failedAttempts[uid] ?: 0) + 1}/$MAX_RETRIES)")
@@ -108,7 +86,6 @@ class AvatarCache(private val cacheDir: File) {
 
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) {
-                diskFile.writeBytes(bytes)
                 memoryCache[uid] = bitmap.asImageBitmap()
                 Log.i(TAG, "Avatar loaded for $uid")
             } else {

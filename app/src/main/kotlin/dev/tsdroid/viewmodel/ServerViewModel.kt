@@ -183,6 +183,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     var activeChatTab = 0
     var activePmUserId: Int? = null
 
+    // 跟踪每个用户的 avatarId，变化时清除缓存强制刷新
+    private val knownAvatarIds = mutableMapOf<Int, String>()
+
     private var bound = false
 
     init {
@@ -404,6 +407,15 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
             if (uid.isEmpty()) continue
             if (user.isQuery) continue
             if (user.avatarId.isNullOrEmpty()) continue  // no avatar on server
+
+            // 如果 avatarId 变了，清缓存强制刷新
+            val prevId = knownAvatarIds[user.id]
+            if (prevId != null && prevId != user.avatarId) {
+                Log.i(TAG, "Avatar changed for ${user.nickname}: $prevId -> ${user.avatarId}, clearing cache")
+                avatarCache.clearAllCache(uid)
+            }
+            knownAvatarIds[user.id] = user.avatarId
+
             if (avatarCache.getAvatar(uid) != null) continue
             if (avatarCache.hasNoAvatar(uid)) continue
             Log.d(TAG, "loadAvatars: launching download for ${user.nickname}")

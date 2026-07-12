@@ -284,7 +284,7 @@ class AudioBridge(
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -322,13 +322,19 @@ class AudioBridge(
                         val pcmBytes = decoder.decode(opusData)
                         bytesToShorts(pcmBytes, decodeBuffer)
                         hasData = true
-                        // Mix: sum with clipping
+                        // Mix: sum voices with peak-aware scaling to avoid hard clipping
+                        var peak = 0
+                        // First pass: find peak
                         for (i in mixBuffer.indices) {
                             val sum = mixBuffer[i].toInt() + decodeBuffer[i].toInt()
-                            mixBuffer[i] = sum.coerceIn(
-                                Short.MIN_VALUE.toInt(),
-                                Short.MAX_VALUE.toInt(),
-                            ).toShort()
+                            val abs = if (sum < 0) -sum else sum
+                            if (abs > peak) peak = abs
+                        }
+                        // Second pass: mix with scale if needed
+                        val mixScale = if (peak > 30000) 30000f / peak else 1f
+                        for (i in mixBuffer.indices) {
+                            val sum = (mixBuffer[i].toInt() + decodeBuffer[i].toInt()) * mixScale
+                            mixBuffer[i] = sum.toInt().toShort()
                         }
                     } catch (_: Exception) {}
                 }
@@ -336,10 +342,16 @@ class AudioBridge(
                 if (hasData) {
                     val gain = outputGainFactor
                     if (gain != 1.0f) {
+                        var peak = 0
                         for (i in mixBuffer.indices) {
-                            mixBuffer[i] = (mixBuffer[i] * gain).toInt()
-                                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                                .toShort()
+                            val v = (mixBuffer[i] * gain).toInt()
+                            val abs = if (v < 0) -v else v
+                            if (abs > peak) peak = abs
+                        }
+                        val gScale = if (peak > 30000) 30000f / peak else 1f
+                        for (i in mixBuffer.indices) {
+                            val v = ((mixBuffer[i] * gain) * gScale).toInt()
+                            mixBuffer[i] = v.toShort()
                         }
                     }
                     val bytes = shortsToBytes(mixBuffer)
